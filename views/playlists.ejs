@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playlists</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">My App</div>
+        <ul class="nav-links">
+            <li><a href="/display">Videos</a></li>
+            <li><a href="/playlists">Playlists</a></li>
+        </ul>
+    </nav>
+
+    <h1>Playlist Data</h1>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Playlist ID</th>
+                <th>Playlist Name</th>
+                <th>Is Public</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% playlists.forEach(playlist => { %>
+                <tr>
+                    <td><%= playlist.playlist_id %></td>
+                    <td><%= playlist.playlist_name %></td>
+                    <td><%= playlist.is_public ? 'Yes' : 'No' %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+</body>
+</html>

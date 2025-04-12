@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Video</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <nav>
+        <div class="navbar-logo">My App</div>
+        <div class="navbar-links">
+            <a href="/" class="active">Home</a>
+            <a href="/display">Videos</a>
+            <a href="/playlists">Playlists</a>
+            <a href="/upload" class="upload-btn">Upload Data</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2>Edit Video</h2>
+        <form action="/update/<%= video.video_id %>" method="POST">
+            <label>Video Title:</label>
+            <input type="text" name="video_title" value="<%= video.video_title %>" required>
+
+            <label>Category:</label>
+            <input type="text" name="category_name" value="<%= video.category_name %>" required>
+
+            <label>Sub Category:</label>
+            <input type="text" name="sub_category_name" value="<%= video.sub_category_name %>" required>
+
+            <label>Orator:</label>
+            <input type="text" name="orator" value="<%= video.orator || '' %>">
+
+            <label>Sabha Number:</label>
+            <input type="number" name="sabha_number" value="<%= video.sabha_number || 0 %>">
+
+            <button type="submit">Update</button>
+        </form>
+    </div>
+</body>
+</html>
