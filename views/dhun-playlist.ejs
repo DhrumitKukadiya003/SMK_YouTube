@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dhun Playlist</title>
+</head>
+<body>
+    <h1>Dhun Playlist</h1>
+    <a href="<%= exportUrl %>">Export to Excel</a>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Playlist Order</th>
+                <th>Video Title</th>
+                <th>Video ID</th>
+                <th>Channel ID</th>
+                <th>Category</th>
+                <th>Sub Category</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% playlist.forEach(video => { %>
+                <tr>
+                    <td><%= video.playlist_order %></td>
+                    <td><%= video.video_title %></td>
+                    <td><%= video.video_id %></td>
+                    <td><%= video.channel_id %></td>
+                    <td><%= video.category_name %></td>
+                    <td><%= video.sub_category_name %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+</body>
+</html>

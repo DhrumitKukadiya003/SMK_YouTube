@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Filters</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="container max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
+        <h1 class="text-2xl font-semibold text-gray-800 mb-6 text-center">Manage Video Filters</h1>
+
+        <div class="mb-6 rounded-lg shadow-sm">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4 px-6 py-3 bg-gray-50 rounded-t-lg">Add New Filter</h2>
+            <form action="/video-filters/add" method="post" class="p-6 space-y-4">
+                <div>
+                    <label for="filter_type" class="block text-gray-700 text-sm font-bold mb-2">Filter Type:</label>
+                    <select name="filter_type" id="filter_type" required class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <% filterTypes.forEach(type => { %>
+                            <option value="<%= type %>"><%= type %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter_value" class="block text-gray-700 text-sm font-bold mb-2">Filter Value:</label>
+                    <input type="text" name="filter_value" id="filter_value" required class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                <div>
+                    <label for="matched_video_title" class="block text-gray-700 text-sm font-bold mb-2">Matched Video Title:</label>
+                    <input type="text" name="matched_video_title" id="matched_video_title"  class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Add Filter</button>
+            </form>
+        </div>
+
+        <div class="mb-8 rounded-lg shadow-sm">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4 px-6 py-3 bg-gray-50 rounded-t-lg">Existing Filters</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full leading-normal shadow-md rounded-lg overflow-hidden">
+                    <thead class="bg-gray-200 text-gray-700">
+                        <tr>
+                            <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Filter ID</th>
+                            <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Filter Type</th>
+                            <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Filter Value</th>
+                            <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Matched Video Title</th>
+                            <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Timestamp</th>
+                            <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white">
+                        <% filters.forEach(filter => { %>
+                            <tr>
+                                <td class="px-5 py-5 border-b border-gray-200 text-sm"><%= filter.filter_id %></td>
+                                <td class="px-5 py-5 border-b border-gray-200 text-sm"><%= filter.filter_type %></td>
+                                <td class="px-5 py-5 border-b border-gray-200 text-sm"><%= filter.filter_value %></td>
+                                 <td class="px-5 py-5 border-b border-gray-200 text-sm"><%= filter.matched_video_title %></td>
+                                <td class="px-5 py-5 border-b border-gray-200 text-sm"><%= filter.timestamp %></td>
+                                <td class="px-5 py-5 border-b border-gray-200 text-sm">
+                                    <form action="/video-filters/delete/<%= filter.filter_id %>" method="post" class="inline-block">
+                                        <button type="submit" class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline text-xs">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="flex justify-center space-x-4 mt-8 items-center">
+            <a href="<%= exportUrl %>" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm">Export to Excel</a>
+            <form action="/video-filters/import" method="post" enctype="multipart/form-data" class="flex items-center space-x-2">
+                <input type="file" name="excelFile" accept=".xlsx" required class="text-sm">
+                <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm">Import from Excel</button>
+            </form>
+        </div>
+         <div class="mt-8 text-center">
+            <a href="/display" class="text-blue-600 hover:text-blue-800 font-semibold text-lg">Go to Main Display Page</a>
+        </div>
+    </div>
+</body>
+</html>

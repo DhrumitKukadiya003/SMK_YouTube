@@ -28,23 +28,39 @@
         button:hover {
             background-color: #45a049;
         }
+        .nav-button {
+            display: inline-block;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .nav-button a {
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
     <h1>Excel Data Importer</h1>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <label for="channel">Select Channel:</label>
-        <select name="channel_id" id="channel_id" required>
-            <option value="">-- Select Channel --</option>
-            <option value="Swaminarayan">Swaminarayan</option>
-            <option value="Swaminarayan Bhagwan">Swaminarayan Bhagwan</option>
-        </select>
-    
-        <label for="excelFile">Upload Excel File:</label>
-        <input type="file" name="excelFile" required>
-    
-        <button type="submit">Upload</button>
-    </form>
-    
+
+    <div class="upload-container">
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+            <div>
+                <label for="channel_id">Select Channel:</label>
+                <select name="channel_id" id="channel_id" required>
+                    <option value="">-- Select Channel --</option>
+                    <option value="Swaminarayan">Swaminarayan</option>
+                    <option value="Swaminarayan Bhagwan">Swaminarayan Bhagwan</option>
+                </select>
+            </div>
+            <br>
+            <div>
+                <label for="excelFile">Upload Excel File:</label>
+                <input type="file" name="excelFile" required>
+            </div>
+            <br>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+
+
 </body>
 </html>
