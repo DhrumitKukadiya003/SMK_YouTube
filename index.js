@@ -427,16 +427,25 @@ app.post('/edit/:videoId', async (req, res) => {
     }
 });
 
-// Add this route to render the edit form
 app.get('/edit/:videoId', async (req, res) => {
     const { videoId } = req.params;
 
     try {
         const client = await pool.connect();
         const query = `
-            SELECT video_id, video_title, channel_id
-            FROM videos
-            WHERE video_id = $1
+            SELECT
+                v.video_id,
+                v.video_title,
+                v.channel_id,
+                c.category_name,
+                sc.sub_category_name,
+                kd.orator,
+                kd.sabha_number
+            FROM videos v
+            INNER JOIN categories c ON v.category_id = c.category_id
+            INNER JOIN sub_categories sc ON v.sub_category_id = sc.sub_category_id
+            LEFT JOIN katha_details kd ON v.id = kd.video_id
+            WHERE v.video_id = $1
         `;
         const result = await client.query(query, [videoId]);
         client.release();
