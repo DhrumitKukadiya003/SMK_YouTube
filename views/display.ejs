@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,51 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Display Data</title>
     <link rel="stylesheet" href="/styles.css">
-    <style>
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 20px;
-        }
-        .pagination a, .pagination span {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            margin: 0 5px;
-            text-decoration: none;
-            color: #333;
-            border-radius: 5px;
-            background-color: #f4f4f4;
-        }
-        .pagination a:hover {
-            background-color: #ddd;
-        }
-        .pagination a.active {
-            background-color: #4CAF50;
-            color: white;
-            border-color: #4CAF50;
-        }
-        .pagination input {
-            width: 40px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            margin: 0 5px;
-            text-align: center;
-        }
-        .pagination button {
-            padding: 8px 12px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-left: 5px;
-        }
-        .pagination button:hover {
-            background-color: #45a049;
-        }
-    </style>
 </head>
 <body>
     <nav>
@@ -59,8 +15,10 @@
             <a href="/display">Videos</a>
             <a href="/playlists">Playlists</a>
             <a href="/dhun-dashboard">Dhun Dashboard</a>
+            <a href="/dhun-playlist">Dhun Playlist</a>
             <a href="/upload" class="upload-btn">Upload Data</a>
-            <a href="/video-filters">Video Filters</a> </div>
+            <a href="/video-filters">Video Filters</a>
+        </div>
     </nav>
 
     <div class="container">
@@ -83,6 +41,8 @@
             <thead>
                 <tr>
                     <th>Video ID</th>
+                    <th>Playlist ID</th>
+                    <th>Playlist Name</th>
                     <th>Title</th>
                     <th>Channel</th>
                     <th>Type</th>
@@ -97,6 +57,8 @@
                     <% videos.forEach(video => { %>
                         <tr>
                             <td><%= video.video_id %></td>
+                            <td><%= video.playlist_id %></td>
+                            <td><%= video.playlist_name %></td>
                             <td><%= video.video_title %></td>
                             <td><%= video.channel_id || 'N/A' %></td>
                             <td><%= video.type_name %></td>
@@ -104,7 +66,7 @@
                             <td><%= video.orator || 'N/A' %></td>
                             <td><%= video.sabha_number || 'N/A' %></td>
                             <td>
-                                 <a href="/edit/<%= video.video_id %>" class="edit-btn">Edit</a>
+                                <a href="/edit/<%= video.video_id %>" class="edit-btn">Edit</a>
                             </td>
                         </tr>
                     <% }) %>
@@ -121,15 +83,11 @@
                 <a href="/display?page=1&limit=<%= limit %>">First</a>
                 <a href="/display?page=<%= currentPage - 1 %>&limit=<%= limit %>">Previous</a>
             <% } %>
-
-            <span class="current">Page <%= currentPage %> of <%= totalPages %></span>
-
+            
             <% if (currentPage < totalPages) { %>
                 <a href="/display?page=<%= currentPage + 1 %>&limit=<%= limit %>">Next</a>
                 <a href="/display?page=<%= totalPages %>&limit=<%= limit %>">Last</a>
             <% } %>
-             <input type="number" id="pageInput" placeholder="Page">
-            <button onclick="goToPage()">Go</button>
         </div>
     </div>
 
@@ -137,16 +95,6 @@
         function changeLimit() {
             const limit = document.getElementById('recordsPerPage').value;
             window.location.href = `/display?page=1&limit=${limit}`;
-        }
-        function goToPage() {
-            const page = document.getElementById('pageInput').value;
-             const limit = document.getElementById('recordsPerPage').value;
-            if (page >= 1 && page <= <%= totalPages %>) {
-                window.location.href = `/display?page=${page}&limit=${limit}`;
-            } else {
-                alert('Invalid page number');
-                console.log("Invalid page number:", page); // ADDED CONSOLE LOG
-            }
         }
     </script>
 </body>

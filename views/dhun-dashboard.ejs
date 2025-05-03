@@ -78,16 +78,22 @@
                             Video ID
                         </th>
                         <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
+                            Playlist ID
+                        </th>
+                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
+                            Playlist Name
+                        </th>
+                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
                             Video Title
                         </th>
                         <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
                             Channel ID
                         </th>
                         <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Category Name
+                            Type Name
                         </th>
                         <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Sub Category Name
+                            Category Name
                         </th>
                     </tr>
                 </thead>
@@ -98,16 +104,22 @@
                                 <span class="text-gray-900 whitespace-no-wrap"><%= video.video_id %></span>
                             </td>
                             <td class="px-5 py-5 border-b border-gray-200 text-sm">
+                                <span class="text-gray-900 whitespace-no-wrap"><%= video.playlist_id %></span>
+                            </td>
+                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
+                                <span class="text-gray-900 whitespace-no-wrap"><%= video.playlist_name %></span>
+                            </td>
+                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
                                 <span class="text-gray-900 whitespace-no-wrap"><%= video.video_title %></span>
                             </td>
                             <td class="px-5 py-5 border-b border-gray-200 text-sm">
                                 <span class="text-gray-900 whitespace-no-wrap"><%= video.channel_id %></span>
                             </td>
                             <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.category_name %></span>
+                                <span class="text-gray-900 whitespace-no-wrap"><%= video.type_name %></span>
                             </td>
                             <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.sub_category_name %></span>
+                                <span class="text-gray-900 whitespace-no-wrap"><%= video.category_name %></span>
                             </td>
                         </tr>
                     <% }); %>
