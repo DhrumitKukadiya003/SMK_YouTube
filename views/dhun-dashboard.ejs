@@ -1,168 +1,126 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dhun Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .pagination-link {
-            @apply px-4 py-2 rounded-md transition-colors;
-        }
-        .pagination-link:hover {
-            @apply bg-blue-100 text-blue-600;
-        }
-        .active-page {
-            @apply bg-blue-500 text-white font-semibold;
-            /* Added to highlight the current page */
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
-        }
-        .disabled-link {
-            @apply text-gray-400 cursor-not-allowed;
-        }
-        .disabled-link:hover {
-            @apply bg-transparent text-gray-400;
-        }
-        .table-container {
-            overflow-x: auto;
-            margin-bottom: 1.5rem;
-        }
-        .export-button {
-            @apply bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow-md transition-colors duration-300;
-            /* New styles to make it look more like a button */
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            line-height: 1.5rem;
-            border-radius: 0.375rem;
-            font-weight: 600;
-            color: #fff;
-            background-color: #16a34a;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            transition-property: background-color, transform, box-shadow;
-            transition-duration: 300ms;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dhun Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
 
-        .export-button:hover {
-            @apply bg-green-600 transform:translateY(-1px) shadow-lg;
-        }
-
-        .export-container {
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: flex-end;
-        }
-    </style>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .active {
+      @apply bg-blue-600 text-white font-semibold shadow-sm;
+    }
+    .export-button {
+      @apply bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded transition duration-300 shadow-md;
+    }
+    .pagination-link {
+      @apply px-3 py-1 border border-gray-300 bg-white rounded hover:bg-blue-100;
+    }
+    .disabled-link {
+      @apply text-gray-400 bg-gray-100 cursor-not-allowed;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 p-6">
-    <div class="container mx-auto bg-white shadow-md rounded-lg p-8">
-        <h1 class="text-2xl font-semibold text-blue-600 text-center mb-6">Dhun Dashboard</h1>
-        <div class="export-container">
-            <a href="<%= exportUrl %>" class="export-button">
-                Export to Excel
-            </a>
-        </div>
-        <div class="table-container">
-            <table class="min-w-full leading-normal shadow-md rounded-lg overflow-hidden">
-                <thead class="bg-gray-200 text-gray-700">
-                    <tr>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Video ID
-                        </th>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Playlist ID
-                        </th>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Playlist Name
-                        </th>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Video Title
-                        </th>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Channel ID
-                        </th>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Type Name
-                        </th>
-                        <th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">
-                            Category Name
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white">
-                    <% videos.forEach(video => { %>
-                        <tr>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.video_id %></span>
-                            </td>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.playlist_id %></span>
-                            </td>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.playlist_name %></span>
-                            </td>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.video_title %></span>
-                            </td>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.channel_id %></span>
-                            </td>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.type_name %></span>
-                            </td>
-                            <td class="px-5 py-5 border-b border-gray-200 text-sm">
-                                <span class="text-gray-900 whitespace-no-wrap"><%= video.category_name %></span>
-                            </td>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
-        </div>
-        <div class="mt-6 flex justify-center items-center space-x-2">
-            <% if (currentPage > 1) { %>
-                <a href="?page=<%= currentPage - 1 %>" class="pagination-link">Previous</a>
-            <% } else { %>
-                <span class="pagination-link disabled-link">Previous</span>
-            <% } %>
+<body class="bg-gray-100">
 
-            <%
-                let startPage = Math.max(1, currentPage - 2);
-                let endPage = Math.min(totalPages, currentPage + 2);
-
-                if (totalPages <= 5) {
-                    startPage = 1;
-                    endPage = totalPages;
-                } else if (currentPage <= 3) {
-                    startPage = 1;
-                    endPage = 5;
-                } else if (currentPage >= totalPages - 2) {
-                    startPage = totalPages - 4;
-                    endPage = totalPages;
-                }
-            %>
-
-            <% for (let i = startPage; i <= endPage; i++) { %>
-                <% if (i === currentPage) { %>
-                    <span class="pagination-link active-page"><%= i %></span>
-                <% } else { %>
-                    <a href="?page=<%= i %>" class="pagination-link"><%= i %></a>
-                <% } %>
-            <% } %>
-
-            <% if (currentPage < totalPages) { %>
-                <a href="?page=<%= currentPage + 1 %>" class="pagination-link">Next</a>
-            <% } else { %>
-                <span class="pagination-link disabled-link">Next</span>
-            <% } %>
-        </div>
+  <!-- Navbar -->
+  <nav class="bg-gray-800 text-white shadow-md px-6 py-4 flex justify-between items-center">
+    <div class="text-xl font-bold">Dhun Dashboard</div>
+    <div class="flex space-x-4 text-sm">
+      <a href="/" class="<%= currentRoute === '/' ? 'active' : '' %> hover:text-white px-3 py-2 rounded">Home</a>
+      <a href="/display" class="<%= currentRoute === '/display' ? 'active' : '' %> hover:text-white px-3 py-2 rounded">Videos</a>
+      <a href="/playlists" class="<%= currentRoute === '/playlists' ? 'active' : '' %> hover:text-white px-3 py-2 rounded">Playlists</a>
+      <a href="/dhun-dashboard" class="<%= currentRoute === '/dhun-dashboard' ? 'active' : '' %> hover:text-white px-3 py-2 rounded">Dhun Dashboard</a>
+      <a href="/dhun-playlist" class="<%= currentRoute === '/dhun-playlist' ? 'active' : '' %> hover:text-white px-3 py-2 rounded">Dhun Playlist</a>
+      <a href="/upload" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-semibold">Upload Data</a>
+      <a href="/video-filters" class="<%= currentRoute === '/video-filters' ? 'active' : '' %> hover:text-white px-3 py-2 rounded">Video Filters</a>
     </div>
+  </nav>
+
+  <!-- Page Content -->
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div class="bg-white shadow-md rounded-lg p-6 sm:p-8">
+      <h1 class="text-2xl font-bold text-blue-700 text-center mb-6">Dhun Dashboard</h1>
+
+      <!-- Export Button -->
+      <div class="flex justify-end mb-4">
+        <a href="<%= exportUrl %>" class="export-button">Export to Excel</a>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-x-auto mb-6">
+        <table class="min-w-full table-auto bg-white rounded shadow-sm overflow-hidden">
+          <thead class="bg-gray-200 text-gray-700 text-xs uppercase tracking-wider">
+            <tr>
+              <th class="px-5 py-3 text-left">Video ID</th>
+              <th class="px-5 py-3 text-left">Playlist ID</th>
+              <th class="px-5 py-3 text-left">Playlist Name</th>
+              <th class="px-5 py-3 text-left">Video Title</th>
+              <th class="px-5 py-3 text-left">Channel ID</th>
+              <th class="px-5 py-3 text-left">Type Name</th>
+              <th class="px-5 py-3 text-left">Category Name</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            <% videos.forEach(video => { %>
+              <tr class="hover:bg-gray-100 odd:bg-gray-50">
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.video_id %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.playlist_id %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.playlist_name %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.video_title %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.channel_id %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.type_name %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.category_name %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex justify-center space-x-2 text-sm">
+        <% if (currentPage > 1) { %>
+          <a href="?page=<%= currentPage - 1 %>" class="pagination-link">Previous</a>
+        <% } else { %>
+          <span class="pagination-link disabled-link">Previous</span>
+        <% } %>
+
+        <%
+          let startPage = Math.max(1, currentPage - 2);
+          let endPage = Math.min(totalPages, currentPage + 2);
+
+          if (totalPages <= 5) {
+            startPage = 1;
+            endPage = totalPages;
+          } else if (currentPage <= 3) {
+            startPage = 1;
+            endPage = 5;
+          } else if (currentPage >= totalPages - 2) {
+            startPage = totalPages - 4;
+            endPage = totalPages;
+          }
+        %>
+
+        <% for (let i = startPage; i <= endPage; i++) { %>
+          <% if (i === currentPage) { %>
+            <span class="pagination-link bg-blue-600 text-white font-semibold shadow-sm"><%= i %></span>
+          <% } else { %>
+            <a href="?page=<%= i %>" class="pagination-link"><%= i %></a>
+          <% } %>
+        <% } %>
+
+        <% if (currentPage < totalPages) { %>
+          <a href="?page=<%= currentPage + 1 %>" class="pagination-link">Next</a>
+        <% } else { %>
+          <span class="pagination-link disabled-link">Next</span>
+        <% } %>
+      </div>
+
+    </div>
+  </main>
 </body>
 </html>

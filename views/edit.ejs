@@ -9,50 +9,60 @@
         /* You can add your styles here, or in a separate styles.css file */
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
             background-color: #f4f4f4; /* Light background for body */
+            margin: 0; /* Reset margin */
+            padding: 0; /* Reset padding */
         }
         nav {
-            background-color: #333; /* Dark background for navbar */
-            overflow: hidden;
+            background-color: #2d3748; /* Dark gray */
+            color: white;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex; /* Use flexbox for layout */
+            align-items: center;
+            justify-content: space-between; /* Logo left, links right */
+            /* overflow: hidden; /* Removed, flex handles layout better */
         }
         nav .navbar-logo {
-            float: left;
-            color: white;
-            text-align: center;
-            padding: 14px 16px;
+            /* float: left; /* Removed */
+            color: white; /* Ensured color */
+            /* text-align: center; /* Not needed with flex */
+            /* padding: 14px 16px; /* Adjusted padding below */
             text-decoration: none;
-            font-size: 1.5em;
+            font-size: 1.25rem; /* Adjusted size */
+            font-weight: bold;
         }
         nav .navbar-links {
-            float: right;
+            /* float: right; /* Removed */
+            display: flex; /* Ensure links are in a row */
+            align-items: center;
         }
         nav .navbar-links a {
-            color: white;
-            text-align: center;
-            padding: 14px 16px;
+            color: #cbd5e0; /* Light gray text */
+            /* text-align: center; /* Not needed for inline-flex items */
+            padding: 0.5rem 0.75rem; /* Standardized padding */
             text-decoration: none;
-            font-size: 1em;
+            font-size: 0.875rem; /* Standardized font size */
+            border-radius: 0.375rem; /* Rounded corners */
+            font-weight: 500; /* Medium weight */
+            margin-left: 0.5rem; /* Spacing between links */
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
         }
         nav .navbar-links a:hover {
-            background-color: #575757; /* Slightly lighter on hover */
+            background-color: #4a5568; /* Darker gray on hover */
+            color: white;
         }
         nav .navbar-links a.active {
-            background-color: #04AA6D; /* Green for active page */
+            background-color: #3182ce; /* Blue for active page */
+            color: white; /* Ensure text is white */
+            font-weight: 600; /* Semibold */
         }
         nav .upload-btn {
-            background-color: #04AA6D;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-left: 10px;
-            text-decoration: none;
+            background-color: #38a169; /* Green */
+            /* Specific padding and other properties inherited or can be fine-tuned if needed */
         }
         nav .upload-btn:hover {
-            background-color: #048751; /* Darker green on hover */
+            background-color: #2f855a; /* Darker green on hover */
         }
 
         .container {
@@ -60,7 +70,7 @@
             margin-top: 20px;
             background-color: white; /* White background for container */
             border-radius: 5px;
-            width: 80%;
+            width: 90%; /* Adjusted for better responsiveness */
             max-width: 600px;
             margin-left: auto;
             margin-right: auto;
@@ -132,14 +142,15 @@
 </head>
 <body>
     <nav>
-        <div class="navbar-logo">My App</div>
+        <div class="navbar-logo">My App</div> <!-- This div will be styled by "nav .navbar-logo" -->
         <div class="navbar-links">
-            <a href="/" class="active">Home</a>
-            <a href="/display">Videos</a>
-            <a href="/playlists">Playlists</a>
-            <a href="/upload" class="upload-btn">Upload Data</a>
+          <a href="/" class="active">Home</a>
+          <a href="/display">Videos</a>
+          <a href="/playlists">Playlists</a>
+          <!-- Note: The .upload-btn class on the <a> tag will be styled by "nav .upload-btn" -->
+          <a href="/upload" class="upload-btn">Upload Data</a>
         </div>
-    </nav>
+      </nav>
 
     <div class="container">
         <h2>Edit Video</h2>

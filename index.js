@@ -846,7 +846,8 @@ app.get('/dhun-dashboard', async (req, res) => {
             videos: result.rows,
             currentPage: page > 0 ? page : 1,
             totalPages: totalPages,
-            exportUrl: '/dhun-dashboard/export'
+            exportUrl: '/dhun-dashboard/export',
+            currentRoute: req.path // This is the key line!
         });
 
     } catch (err) {
