@@ -37,6 +37,7 @@ app.use(express.static('public')); // Serve static files from 'public' directory
 
 // --- Table Name Constants ---
 const DHUN_DATA_TABLE = 'dhun_dashboard_data';
+const KIRTAN_DATA_TABLE = 'kirtan_dashboard_data'; // New table for Kirtan
 const DHUN_PLAYLIST_TABLE = 'dhun_playlist';
 const STREAMED_DHUN_TABLE = 'streamed_dhun_table';
 const LYRICAL_DHUN_TABLE = 'lyrical_video_dhun_table';
@@ -170,7 +171,10 @@ async function refreshDhunDashboardData(client) {
             ORDER BY v.video_title ASC;
         `;
         await client.query(query);
-        console.log('Dhun dashboard data refreshed successfully.');
+        const countResult = await client.query(`SELECT COUNT(*) FROM ${DHUN_DATA_TABLE}`);
+        console.log(`Dhun dashboard data refreshed successfully. Total rows in ${DHUN_DATA_TABLE}: ${countResult.rows[0].count}`);
+
+
 
         // Refresh the specific dhun tables based on the newly populated dashboard data
         await refreshSpecificDhunTables(client);
@@ -302,8 +306,9 @@ async function generateDhunPlaylist(client) {
                 ]
             );
         }
+        const playlistCountResult = await client.query(`SELECT COUNT(*) FROM ${DHUN_PLAYLIST_TABLE}`);
+        console.log(`Dhun Playlist Generated. Total rows in ${DHUN_PLAYLIST_TABLE}: ${playlistCountResult.rows[0].count}`);
 
-        console.log(`Dhun Playlist Generated with ${playlist.length} entries.`);
 
     } catch (error) {
         console.error('Error generating Dhun Playlist:', error);
@@ -311,6 +316,50 @@ async function generateDhunPlaylist(client) {
     }
 }
 
+/**
+ * Refreshes the main Kirtan dashboard data table by querying the core video tables.
+ * @param {pg.Client} client - The PostgreSQL client.
+ */
+async function refreshKirtanDashboardData(client) {
+    console.log('Refreshing kirtan dashboard data...');
+    try {
+        // Clear the existing data
+        await client.query(`DELETE FROM ${KIRTAN_DATA_TABLE}`);
+
+        // Re-populate with latest data, including playlist info and video DB ID
+        const query = `
+            INSERT INTO ${KIRTAN_DATA_TABLE} (
+                video_db_id, video_id, video_title, channel_id,
+                type_name, category_name, playlist_id, playlist_name
+            )
+            SELECT
+                v.id AS video_db_id,
+                v.video_id,
+                v.video_title,
+                v.channel_id,
+                t.type_name,
+                c.category_name,
+                v.playlist_id,
+                p.playlist_name
+            FROM ${VIDEOS_TABLE} v
+            LEFT JOIN ${TYPES_TABLE} t ON v.type_id = t.type_id
+            LEFT JOIN ${CATEGORIES_TABLE} c ON v.category_id = c.category_id
+            LEFT JOIN ${PLAYLISTS_TABLE} p ON v.playlist_id = p.playlist_id
+            WHERE
+                (
+                    LOWER(t.type_name) LIKE '%kirtan%' OR
+                    LOWER(c.category_name) LIKE '%kirtan%'
+                )
+            ORDER BY v.video_title ASC;
+        `;
+        await client.query(query);
+        const countResult = await client.query(`SELECT COUNT(*) FROM ${KIRTAN_DATA_TABLE}`);
+        console.log(`Kirtan dashboard data refreshed successfully. Total rows in ${KIRTAN_DATA_TABLE}: ${countResult.rows[0].count}`);
+    } catch (error) {
+        console.error('Error refreshing kirtan dashboard data:', error);
+        throw error; // Re-throw error
+    }
+}
 
 // --- Filter Application Function ---
 /**
@@ -432,7 +481,7 @@ async function applyFilters(data, client) {
                     }
                 }
             }
-        }
+        }1
         console.log('Filter application complete. Matching videos set to is_active=false.');
     } catch (error) {
         console.error('Error applying filters:', error);
@@ -604,9 +653,11 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
             // --- Apply Filters after all data is inserted ---
             await applyFilters(data, client);
 
-            // Refresh derived Dhun data and generate playlist
+            // Refresh derived Dhun data, Kirtan data, and generate Dhun playlist
             console.log('Triggering refresh of Dhun data and playlist...');
             await refreshDhunDashboardData(client);
+            console.log('Triggering refresh of Kirtan data...');
+            await refreshKirtanDashboardData(client); // Add call to refresh Kirtan data
 
             await client.query('COMMIT');
             console.log('Upload process committed successfully.');
@@ -688,8 +739,9 @@ app.get('/display', async (req, res) => {
                 videos: videosResult.rows,
                 currentPage: page > 0 ? page : 1,
                 totalPages: totalPages,
-                limit: limitParam,
-                totalRecords: totalRecords
+                limit: limitParam, 
+                totalRecords: totalRecords,
+                currentRoute: req.path // Add this line
             });
         } finally {
             client.release();
@@ -867,6 +919,55 @@ app.get('/dhun-dashboard/export', (req, res) => {
     exportToExcel(res, query, 'Dhun_Dashboard_Data');
 });
 
+// --- Kirtan Dashboard Routes ---
+
+// Display Kirtan Dashboard
+app.get('/kirtan-dashboard', async (req, res) => {
+    let client;
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10; // Or make this configurable like in /display
+        client = await pool.connect();
+
+        const countQuery = `SELECT COUNT(*) FROM ${KIRTAN_DATA_TABLE}`;
+        const countResult = await client.query(countQuery);
+        const totalRecords = parseInt(countResult.rows[0].count);
+        const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
+        const offset = (page > 0 ? page - 1 : 0) * limit;
+
+        const query = `
+            SELECT
+                video_db_id, video_id, video_title, channel_id,
+                type_name, category_name, playlist_id, playlist_name
+            FROM ${KIRTAN_DATA_TABLE}
+            ORDER BY video_title ASC
+            LIMIT $1 OFFSET $2;
+        `;
+        const result = await client.query(query, [limit, offset]);
+
+        res.render('kirtan-dashboard', { // You'll need to create kirtan-dashboard.ejs
+            videos: result.rows,
+            currentPage: page > 0 ? page : 1,
+            totalPages: totalPages,
+            exportUrl: '/kirtan-dashboard/export',
+            currentRoute: req.path
+        });
+    } catch (err) {
+        console.error('Error loading Kirtan Dashboard:', err);
+        res.status(500).send('Failed to load Kirtan Dashboard');
+    } finally {
+        if (client) client.release();
+    }
+});
+
+// Export Kirtan Dashboard Data
+app.get('/kirtan-dashboard/export', (req, res) => {
+    const query = `
+        SELECT video_db_id, video_id, video_title, channel_id, type_name,
+               category_name, playlist_id, playlist_name
+        FROM ${KIRTAN_DATA_TABLE} ORDER BY video_title ASC`;
+    exportToExcel(res, query, 'Kirtan_Dashboard_Data');
+});
 
 // --- Specific Dhun Table Routes (Streamed, Lyrical, Jukebox) ---
 
@@ -963,26 +1064,46 @@ app.get('/dhun-jukebox/export', (req, res) => {
 
 
 // --- Dhun Playlist Routes ---
-
 // Display Generated Dhun Playlist
 app.get('/dhun-playlist', async (req, res) => {
-     let client;
     try {
-        client = await pool.connect();
+        const page = parseInt(req.query.page) || 1;
+        let requestedLimit = req.query.limit; // Can be a number or 'all'
+        let limit = parseInt(requestedLimit) || 10; // Default to 10 if not a valid number
 
-        // Fetch playlist data including added columns (updated selected columns)
-        const result = await client.query(`
-            SELECT video_db_id, video_id, video_title, channel_id, type_name, -- Adjusted column names
-                   category_name, playlist_id, playlist_name, playlist_order
-            FROM ${DHUN_PLAYLIST_TABLE}
-            ORDER BY playlist_order ASC
-        `);
+        const client = await pool.connect();
+        try {
+            const countQuery = `SELECT COUNT(*) FROM ${DHUN_PLAYLIST_TABLE}`;
+            const countResult = await client.query(countQuery);
+            const totalRecords = parseInt(countResult.rows[0].count);
 
+            if (requestedLimit === 'all') {
+                limit = totalRecords > 0 ? totalRecords : 1; // Show all records
+            }
 
-        res.render('dhun-playlist', {
-            playlist: result.rows,
-            exportUrl: '/dhun-playlist/export'
-        });
+            const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
+            const offset = (page > 0 ? page - 1 : 0) * limit;
+
+            const query = `
+                SELECT playlist_order, video_id, video_title, channel_id, type_name, category_name, playlist_id, playlist_name
+                FROM ${DHUN_PLAYLIST_TABLE}
+                ORDER BY playlist_order ASC
+                LIMIT $1 OFFSET $2;
+            `;
+            const result = await client.query(query, [limit, offset]);
+
+            res.render('dhun-playlist', {
+                playlist: result.rows,
+                exportUrl: '/dhun-playlist/export',
+                currentRoute: req.path,
+                currentPage: page > 0 ? page : 1,
+                totalPages: totalPages,
+                limit: limit, // Pass the actual limit used (could be totalRecords if 'all')
+                totalRecords: totalRecords // Pass totalRecords for the 'all' option logic
+            });
+        } finally {
+            client.release();
+        }
     } catch (error) {
         console.error('Error loading Dhun Playlist:', error);
         // Check if the table exists, maybe it wasn't generated yet
@@ -991,8 +1112,6 @@ app.get('/dhun-playlist', async (req, res) => {
         } else {
             res.status(500).send('Failed to load Dhun Playlist');
         }
-    } finally {
-        if (client) client.release();
     }
 });
 
@@ -1028,7 +1147,8 @@ app.get('/video-filters', async (req, res) => {
             filters: result.rows,
             filterTypes: filterTypes,
             exportUrl: '/video-filters/export',
-            importUrl: '/video-filters/import'
+            importUrl: '/video-filters/import',
+            currentRoute: req.path // Add this line
         });
     } catch (error) {
         console.error('Error loading video filters:', error);

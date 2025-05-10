@@ -14,20 +14,33 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+        .active-nav-link {
+            @apply text-white font-bold px-3 py-2 rounded-md text-sm; /* Adjusted for bold text, no background/shadow */
+        }
+        .pagination-link {
+          @apply px-3 py-1 border border-gray-300 bg-white rounded hover:bg-blue-100;
+        }
+        .disabled-link {
+          @apply text-gray-400 bg-gray-100 cursor-not-allowed;
+        }
+        .export-button { /* Added for consistency if you want to style it like other export buttons */
+          @apply bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-300;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
     <!-- Navbar -->
-    <nav class="app-navbar bg-gray-800 text-white shadow-md px-6 py-4 flex justify-between items-center">
-        <div class="navbar-logo text-xl font-bold">My App</div>
-        <div class="navbar-links flex space-x-3">
-            <a href="/" class="active bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-semibold shadow-sm">Home</a>
-            <a href="/display" class="text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm">Videos</a>
-            <a href="/playlists" class="text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm">Playlists</a>
-            <a href="/dhun-dashboard" class="text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm">Dhun Dashboard</a>
-            <a href="/dhun-playlist" class="text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm">Dhun Playlist</a>
-            <a href="/upload" class="upload-btn bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-md text-sm">Upload Data</a>
-            <a href="/video-filters" class="text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm">Video Filters</a>
+    <nav class="bg-gray-800 text-white shadow-md px-6 py-4 flex justify-between items-center">
+        <div class="text-xl font-bold">My App</div>
+        <div class="flex space-x-3">
+            <a href="/" class="<%= currentRoute === '/' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Home</a>
+            <a href="/display" class="<%= currentRoute === '/display' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Videos</a>
+            <a href="/playlists" class="<%= currentRoute === '/playlists' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Playlists</a>
+            <a href="/dhun-dashboard" class="<%= currentRoute === '/dhun-dashboard' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Dhun Dashboard</a>
+            <a href="/kirtan-dashboard" class="<%= currentRoute === '/kirtan-dashboard' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Kirtan Dashboard</a>
+            <a href="/dhun-playlist" class="<%= currentRoute === '/dhun-playlist' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Dhun Playlist</a>
+            <a href="/upload" class="bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-md text-sm">Upload Data</a>
+            <a href="/video-filters" class="<%= currentRoute === '/video-filters' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Video Filters</a>
         </div>
     </nav>
 
@@ -36,44 +49,108 @@
         <div class="max-w-7xl mx-auto bg-white shadow-lg rounded-lg p-8">
             <h1 class="text-3xl font-bold text-blue-600 text-center mb-6">Dhun Playlist</h1>
 
-            <div class="flex justify-end mb-4">
-                <a href="<%= exportUrl %>" class="export-button bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-300">
-                    Export to Excel
-                </a>
+            <!-- Actions: Records per page and Export -->
+            <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+              <div>
+                <label for="recordsPerPage" class="text-sm font-medium text-gray-700">Records per page:</label>
+                <select id="recordsPerPage" onchange="changeLimit()" class="ml-2 border-gray-300 rounded-md text-sm px-3 py-1.5 shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                  <option value="10" <% if (limit == 10) { %> selected <% } %>>10</option>
+                  <option value="25" <% if (limit == 25) { %> selected <% } %>>25</option>
+                  <option value="50" <% if (limit == 50) { %> selected <% } %>>50</option>
+                  <option value="100" <% if (limit == 100) { %> selected <% } %>>100</option>
+                  <% if (totalRecords > 0) { %>
+                    <option value="all" <% if (limit >= totalRecords && totalRecords > 0) { %> selected <% } %>>All (<%= totalRecords %>)</option>
+                  <% } %>
+                </select>
+              </div>
+              <a href="<%= exportUrl %>" class="export-button">
+                  Export to Excel
+              </a>
             </div>
 
             <!-- Table -->
-            <div class="overflow-x-auto rounded-lg shadow ring-1 ring-black ring-opacity-5">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-100 text-gray-700 uppercase text-sm tracking-wider">
-                        <tr>
-                            <th class="px-4 py-3 text-left">Order</th>
-                            <th class="px-4 py-3 text-left">Playlist ID</th>
-                            <th class="px-4 py-3 text-left">Playlist Name</th>
-                            <th class="px-4 py-3 text-left">Video Title</th>
-                            <th class="px-4 py-3 text-left">Video ID</th>
-                            <th class="px-4 py-3 text-left">Channel ID</th>
-                            <th class="px-4 py-3 text-left">Type</th>
-                            <th class="px-4 py-3 text-left">Category</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <% playlist.forEach(video => { %>
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-4 py-3 text-sm"><%= video.playlist_order %></td>
-                                <td class="px-4 py-3 text-sm"><%= video.playlist_id %></td>
-                                <td class="px-4 py-3 text-sm font-medium text-gray-900"><%= video.playlist_name %></td>
-                                <td class="px-4 py-3 text-sm"><%= video.video_title %></td>
-                                <td class="px-4 py-3 text-sm"><%= video.video_id %></td>
-                                <td class="px-4 py-3 text-sm"><%= video.channel_id %></td>
-                                <td class="px-4 py-3 text-sm"><%= video.type_name %></td>
-                                <td class="px-4 py-3 text-sm"><%= video.category_name %></td>
+            <% if (playlist && playlist.length > 0) { %>
+                <div class="overflow-x-auto rounded-lg shadow ring-1 ring-black ring-opacity-5 mb-6">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100 text-gray-700 uppercase text-sm tracking-wider">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Order</th>
+                                <th class="px-4 py-3 text-left">Playlist ID</th>
+                                <th class="px-4 py-3 text-left">Playlist Name</th>
+                                <th class="px-4 py-3 text-left">Video Title</th>
+                                <th class="px-4 py-3 text-left">Video ID</th>
+                                <th class="px-4 py-3 text-left">Channel ID</th>
+                                <th class="px-4 py-3 text-left">Type</th>
+                                <th class="px-4 py-3 text-left">Category</th>
                             </tr>
-                        <% }); %>
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <% playlist.forEach(video => { %>
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-4 py-3 text-sm"><%= video.playlist_order %></td>
+                                    <td class="px-4 py-3 text-sm"><%= video.playlist_id || 'N/A' %></td>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900"><%= video.playlist_name || 'N/A' %></td>
+                                    <td class="px-4 py-3 text-sm"><%= video.video_title %></td>
+                                    <td class="px-4 py-3 text-sm"><a href="https://www.youtube.com/watch?v=<%= video.video_id %>" target="_blank" class="text-blue-600 hover:underline"><%= video.video_id %></a></td>
+                                    <td class="px-4 py-3 text-sm"><%= video.channel_id || 'N/A' %></td>
+                                    <td class="px-4 py-3 text-sm"><%= video.type_name || 'N/A' %></td>
+                                    <td class="px-4 py-3 text-sm"><%= video.category_name || 'N/A' %></td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex justify-center space-x-2 text-sm">
+                    <% if (currentPage > 1) { %>
+                      <a href="?page=<%= currentPage - 1 %>&limit=<%= limit %>" class="pagination-link">Previous</a>
+                    <% } else { %>
+                      <span class="pagination-link disabled-link">Previous</span>
+                    <% } %>
+            
+                    <%
+                      let startPage = Math.max(1, currentPage - 2);
+                      let endPage = Math.min(totalPages, currentPage + 2);
+            
+                      if (totalPages <= 5) {
+                        startPage = 1;
+                        endPage = totalPages;
+                      } else if (currentPage <= 3) {
+                        startPage = 1;
+                        endPage = 5;
+                      } else if (currentPage >= totalPages - 2) {
+                        startPage = totalPages - 4;
+                        endPage = totalPages;
+                      }
+                    %>
+            
+                    <% for (let i = startPage; i <= endPage; i++) { %>
+                      <% if (i === currentPage) { %>
+                        <span class="pagination-link bg-blue-600 text-white font-semibold shadow-sm"><%= i %></span>
+                      <% } else { %>
+                        <a href="?page=<%= i %>&limit=<%= limit %>" class="pagination-link"><%= i %></a>
+                      <% } %>
+                    <% } %>
+            
+                    <% if (currentPage < totalPages) { %>
+                      <a href="?page=<%= currentPage + 1 %>&limit=<%= limit %>" class="pagination-link">Next</a>
+                    <% } else { %>
+                      <span class="pagination-link disabled-link">Next</span>
+                    <% } %>
+                </div>
+            <% } else { %>
+                <p class="text-center text-gray-500 mt-6">No videos found in the Dhun playlist.</p>
+            <% } %>
         </div>
     </div>
+
+    <script>
+      function changeLimit() {
+        const limitValue = document.getElementById('recordsPerPage').value;
+        // When changing limit, always go to page 1
+        window.location.href = `/dhun-playlist?page=1&limit=${limitValue}`;
+      }
+    </script>
 </body>
 </html>
