@@ -132,6 +132,10 @@ app.get('/', async (req, res) => {
     }
 });
 
+app.get('/upload', (req, res) => {
+    res.render('index');
+});
+
 /**
  * Applies filters from the database to the uploaded data.
  * @param {Array} data - The video data extracted from the Excel file.
@@ -140,7 +144,7 @@ app.get('/', async (req, res) => {
  */
 async function applyFilters(data, client) {
     try {
-        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
+        const filterResults = await client.query(`SELECT * FROM ${VIDEtheiO_FILTERS_TABLE}`);
         const filters = filterResults.rows;
 
         if (filters.length === 0) {
@@ -221,14 +225,12 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
         let data = xlsx.utils.sheet_to_json(worksheet);
         data = data.filter(item => item['Video Title'] !== 'Private video');
 
-
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
 
-            // Apply filters to the data
-            const filteredData = await applyFilters(data, client);
-
+            // Get video IDs that should be inactive
+            const filteredIds = await getFilteredVideoIds(data, client);
 
             // Delete old data for this channel
             await client.query(`DELETE FROM katha_details WHERE video_id IN (SELECT id FROM videos WHERE channel_id = $1)`, [channelId]);
@@ -237,9 +239,8 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
             await client.query(`DELETE FROM sub_categories WHERE sub_category_id NOT IN (SELECT DISTINCT sub_category_id FROM videos)`);
             await client.query(`DELETE FROM categories WHERE category_id NOT IN (SELECT DISTINCT category_id FROM videos)`);
 
-            for (const row of filteredData) {  // Use filteredData here
+            for (const row of data) {
                 const description = row.Description || '';
-
                 const orator = (description.match(/Orator: ([^\n<]+)/) || [])[1]?.trim() || '';
                 const sabhaNumber = parseInt((description.match(/Sabha Number: (\d+)/) || [])[1]) || 0;
                 const granthName = (description.match(/Granth Name: ([^\n<]+)/) || [])[1]?.trim() || 'NA';
@@ -257,71 +258,57 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
                 let isDhuntv = false;
 
                 const terms = ['mix', 'katha', 'kirtan', 'dhun'];
-
-                // Convert category to lowercase for case-insensitive comparison
                 const categoryLower = category.toLowerCase();
-
-                // Check for 'mix', 'katha', 'kirtan', 'dhun' using `some()` for 'mix' term
-                if (terms.some(term => categoryLower.includes(term))) {
-                    isMixtv = true;
-                }
-
-                // Now check for each specific term
-                if (categoryLower.includes('katha')) {
-                    isKathatv = true;
-                }
-
-                if (categoryLower.includes('kirtan')) {
-                    isKirtantv = true;
-                }
-
-                if (categoryLower.includes('dhun')) {
-                    isDhuntv = true;
-                }
-
+                if (terms.some(term => categoryLower.includes(term))) isMixtv = true;
+                if (categoryLower.includes('katha')) isKathatv = true;
+                if (categoryLower.includes('kirtan')) isKirtantv = true;
+                if (categoryLower.includes('dhun')) isDhuntv = true;
 
                 // Avoid playlist duplication
                 await client.query(`
-                                                INSERT INTO playlists (playlist_id, playlist_name, is_public)
-                                                VALUES ($1, $2, $3)
-                                                ON CONFLICT (playlist_id) DO UPDATE SET playlist_name = EXCLUDED.playlist_name
-                                            `, [row['Playlist Id'], row['Playlist Name'], row['Privacy Status'] === 'public']);
+                    INSERT INTO playlists (playlist_id, playlist_name, is_public)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (playlist_id) DO UPDATE SET playlist_name = EXCLUDED.playlist_name
+                `, [row['Playlist Id'], row['Playlist Name'], row['Privacy Status'] === 'public']);
 
                 const categoryRes = await client.query(`
-                                                INSERT INTO categories (category_name)
-                                                VALUES ($1)
-                                                ON CONFLICT (category_name) DO UPDATE SET category_name = EXCLUDED.category_name
-                                                RETURNING category_id
-                                            `, [category]);
+                    INSERT INTO categories (category_name)
+                    VALUES ($1)
+                    ON CONFLICT (category_name) DO UPDATE SET category_name = EXCLUDED.category_name
+                    RETURNING category_id
+                `, [category]);
                 const categoryId = categoryRes.rows[0].category_id;
 
                 const subCatRes = await client.query(`
-                                                INSERT INTO sub_categories (sub_category_name, category_id)
-                                                VALUES ($1, $2)
-                                                ON CONFLICT (sub_category_name) DO UPDATE SET sub_category_name = EXCLUDED.sub_category_name
-                                                RETURNING sub_category_id
-                                            `, [subCategory, categoryId]);
+                    INSERT INTO sub_categories (sub_category_name, category_id)
+                    VALUES ($1, $2)
+                    ON CONFLICT (sub_category_name) DO UPDATE SET sub_category_name = EXCLUDED.sub_category_name
+                    RETURNING sub_category_id
+                `, [subCategory, categoryId]);
                 const subCategoryId = subCatRes.rows[0].sub_category_id;
 
-                // Insert video with flags
+                // Set is_active = false if filtered, true otherwise
+                const isActive = !filteredIds.has(row['Video Id']);
+
+                // Insert video with flags and is_active
                 const videoInsertRes = await client.query(`
-                                                INSERT INTO videos (
-                                                    video_id, video_title, playlist_id, category_id, sub_category_id, channel_id,
-                                                    is_mixtv, is_kathatv, is_kirtantv, is_dhuntv
-                                                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                                                RETURNING id
-                                            `, [
+                    INSERT INTO videos (
+                        video_id, video_title, playlist_id, category_id, sub_category_id, channel_id,
+                        is_mixtv, is_kathatv, is_kirtantv, is_dhuntv, is_active
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    RETURNING id
+                `, [
                     row['Video Id'], row['Video Title'], row['Playlist Id'], categoryId, subCategoryId, channelId,
-                    isMixtv, isKathatv, isKirtantv, isDhuntv
+                    isMixtv, isKathatv, isKirtantv, isDhuntv, isActive
                 ]);
                 const videoDbId = videoInsertRes.rows[0].id;
 
                 // Insert into katha_details if available
                 if (orator || sabhaNumber || granthName) {
                     await client.query(`
-                                                        INSERT INTO katha_details (video_id, orator, sabha_number, granth_name)
-                                                        VALUES ($1, $2, $3, $4)
-                                                    `, [videoDbId, orator, sabhaNumber, granthName]);
+                        INSERT INTO katha_details (video_id, orator, sabha_number, granth_name)
+                        VALUES ($1, $2, $3, $4)
+                    `, [videoDbId, orator, sabhaNumber, granthName]);
                 }
             }
 
@@ -344,6 +331,58 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
     }
 });
 
+async function getFilteredVideoIds(data, client) {
+    // Fetch filters once
+    const FILTERS_TABLE = 'video_filters';
+    const filterResults = await client.query(`SELECT * FROM ${FILTERS_TABLE}`);
+    const filters = filterResults.rows;
+
+    if (filters.length === 0) {
+        return new Set(); // No filters, nothing to mark inactive
+    }
+
+    // Preprocess filters
+    const videoIdSet = new Set();
+    const playlistIdSet = new Set();
+    const privacyStatusSet = new Set();
+    const videoTitleFilters = [];
+    const playlistNameFilters = [];
+
+    for (const filter of filters) {
+        switch (filter.filter_type) {
+            case 'video_id':
+                videoIdSet.add(filter.filter_value);
+                break;
+            case 'playlist_id':
+                playlistIdSet.add(filter.filter_value);
+                break;
+            case 'privacy_status':
+                privacyStatusSet.add(filter.filter_value.toLowerCase());
+                break;
+            case 'video_title':
+                videoTitleFilters.push(filter.filter_value.toLowerCase());
+                break;
+            case 'playlist_name':
+                playlistNameFilters.push(filter.filter_value.toLowerCase());
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Find video IDs that match any filter
+    const filteredIds = new Set();
+    for (const item of data) {
+        if (videoIdSet.has(item['Video Id'])) { filteredIds.add(item['Video Id']); continue; }
+        if (playlistIdSet.has(item['Playlist Id'])) { filteredIds.add(item['Video Id']); continue; }
+        if (privacyStatusSet.has((item['Privacy Status'] || '').toLowerCase())) { filteredIds.add(item['Video Id']); continue; }
+        const itemTitle = (item['Video Title'] || '').toLowerCase();
+        if (videoTitleFilters.some(f => itemTitle.includes(f))) { filteredIds.add(item['Video Id']); continue; }
+        const itemName = (item['Playlist Name'] || '').toLowerCase();
+        if (playlistNameFilters.some(f => itemName.includes(f))) { filteredIds.add(item['Video Id']); continue; }
+    }
+    return filteredIds;
+}
 
 
 // Display data from database with pagination
@@ -866,5 +905,105 @@ app.post('/video-filters/import', upload.single('excelFile'), async (req, res) =
     } catch (error) {
         console.error('Error handling file upload:', error);
         res.status(500).send('Internal server error.');
+    }
+});
+/**
+ * POST /video-filters/apply
+ * Applies current filters to the videos table by setting is_active = false for matching videos.
+ */
+app.post('/video-filters/apply', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // Fetch all filters
+        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
+        const filters = filterResults.rows;
+        if (filters.length === 0) {
+            client.release();
+            return res.redirect('/video-filters');
+        }
+
+        // Fetch all videos
+        const videoResults = await client.query(`
+            SELECT v.id, v.video_id, v.video_title, v.playlist_id, v.channel_id, v.is_active, v.category_id, v.sub_category_id,
+                   p.playlist_name
+            FROM videos v
+            LEFT JOIN playlists p ON v.playlist_id = p.playlist_id
+        `);
+        const videos = videoResults.rows;
+
+        // Preprocess filters for efficient matching
+        const videoIdSet = new Set();
+        const playlistIdSet = new Set();
+        const privacyStatusSet = new Set();
+        const videoTitleFilters = [];
+        const playlistNameFilters = [];
+
+        for (const filter of filters) {
+            switch (filter.filter_type) {
+                case 'video_id':
+                    videoIdSet.add(filter.filter_value);
+                    break;
+                case 'playlist_id':
+                    playlistIdSet.add(filter.filter_value);
+                    break;
+                case 'privacy_status':
+                    privacyStatusSet.add(filter.filter_value.toLowerCase());
+                    break;
+                case 'video_title':
+                    videoTitleFilters.push(filter.filter_value.toLowerCase());
+                    break;
+                case 'playlist_name':
+                    playlistNameFilters.push(filter.filter_value.toLowerCase());
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // Find video IDs that match any filter
+        const filteredDbIds = [];
+        const allDbIds = [];
+        for (const video of videos) {
+            allDbIds.push(video.id);
+            let exclude = false;
+            if (videoIdSet.has(video.video_id)) { exclude = true; }
+            if (playlistIdSet.has(video.playlist_id)) { exclude = true; }
+            // privacy_status is not present in your schema, so skip
+            const itemTitle = (video.video_title || '').toLowerCase();
+            if (videoTitleFilters.some(f => itemTitle.includes(f))) { exclude = true; }
+            const itemName = (video.playlist_name || '').toLowerCase();
+            if (playlistNameFilters.some(f => itemName.includes(f))) { exclude = true; }
+            if (exclude) {
+                filteredDbIds.push(video.id);
+            }
+        }
+
+        // Compute non-filtered IDs
+        const filteredSet = new Set(filteredDbIds);
+        const nonFilteredDbIds = allDbIds.filter(id => !filteredSet.has(id));
+
+        await client.query('BEGIN');
+        // Set is_active = false for filtered videos
+        if (filteredDbIds.length > 0) {
+            await client.query(
+                `UPDATE videos SET is_active = false WHERE id = ANY($1::int[])`,
+                [filteredDbIds]
+            );
+        }
+        // Set is_active = true for non-filtered videos
+        if (nonFilteredDbIds.length > 0) {
+            await client.query(
+                `UPDATE videos SET is_active = true WHERE id = ANY($1::int[])`,
+                [nonFilteredDbIds]
+            );
+        }
+        await client.query('COMMIT');
+        client.release();
+        res.redirect('/video-filters?applied=1');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        client.release();
+        console.error('Error applying filters to videos:', error);
+        res.status(500).send('Failed to apply filters.');
     }
 });

@@ -80,6 +80,17 @@
                 <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm">Import from Excel</button>
             </form>
         </div>
+        <!-- Place this button somewhere appropriate in your video-filters.ejs, e.g., below the filters table -->
+        <form action="/video-filters/apply" method="post" class="mt-6 text-center">
+            <button type="submit"
+                class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline text-lg">
+                Apply Filter
+            </button>
+        </form>
+        <% if (typeof applied !== 'undefined') { %>
+            <div class="mt-4 text-green-600 font-semibold">Filters applied. Videos table updated.</div>
+        <% } %>
+
          <div class="mt-8 text-center">
             <a href="/display" class="text-blue-600 hover:text-blue-800 font-semibold text-lg">Go to Main Display Page</a>
         </div>
