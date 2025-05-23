@@ -4,174 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Video</title>
-    <link rel="stylesheet" href="/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
     <style>
-        /* You can add your styles here, or in a separate styles.css file */
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4; /* Light background for body */
-            margin: 0; /* Reset margin */
-            padding: 0; /* Reset padding */
+            font-family: 'Inter', sans-serif;
         }
-        nav {
-            background-color: #2d3748; /* Dark gray */
-            color: white;
-            padding: 1rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            display: flex; /* Use flexbox for layout */
-            align-items: center;
-            justify-content: space-between; /* Logo left, links right */
-            /* overflow: hidden; /* Removed, flex handles layout better */
-        }
-        nav .navbar-logo {
-            /* float: left; /* Removed */
-            color: white; /* Ensured color */
-            /* text-align: center; /* Not needed with flex */
-            /* padding: 14px 16px; /* Adjusted padding below */
-            text-decoration: none;
-            font-size: 1.25rem; /* Adjusted size */
-            font-weight: bold;
-        }
-        nav .navbar-links {
-            /* float: right; /* Removed */
-            display: flex; /* Ensure links are in a row */
-            align-items: center;
-        }
-        nav .navbar-links a {
-            color: #cbd5e0; /* Light gray text */
-            /* text-align: center; /* Not needed for inline-flex items */
-            padding: 0.5rem 0.75rem; /* Standardized padding */
-            text-decoration: none;
-            font-size: 0.875rem; /* Standardized font size */
-            border-radius: 0.375rem; /* Rounded corners */
-            font-weight: 500; /* Medium weight */
-            margin-left: 0.5rem; /* Spacing between links */
-            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-        }
-        nav .navbar-links a:hover {
-            background-color: #4a5568; /* Darker gray on hover */
-            color: white;
-        }
-        nav .navbar-links a.active {
-            background-color: #3182ce; /* Blue for active page */
-            color: white; /* Ensure text is white */
-            font-weight: 600; /* Semibold */
-        }
-        nav .upload-btn {
-            background-color: #38a169; /* Green */
-            /* Specific padding and other properties inherited or can be fine-tuned if needed */
-        }
-        nav .upload-btn:hover {
-            background-color: #2f855a; /* Darker green on hover */
+        .active-nav-link { 
+            @apply text-white font-bold px-3 py-2 rounded-md text-sm;
         }
 
         .container {
-            padding: 20px;
-            margin-top: 20px;
-            background-color: white; /* White background for container */
-            border-radius: 5px;
-            width: 90%; /* Adjusted for better responsiveness */
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
+            @apply max-w-2xl mx-auto bg-white shadow-lg rounded-lg p-8 mt-8;
         }
-
-        .container h2 {
-            text-align: center;
+        .form-label {
+            @apply block text-sm font-medium text-gray-700 mb-1;
         }
-
-        .container form {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
+        .form-input {
+            @apply w-full border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500;
         }
-
-        .container form label {
-            margin-top: 10px;
-            margin-bottom: 5px;
-            font-weight: bold;
-            display: block;
-        }
-
-        .container form input[type="text"],
-        .container form input[type="number"] {
-            width: calc(100% - 20px);
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
-        .container form button {
-            background-color: #04AA6D; /* Green for button */
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-            width: 100%;
-            text-align: center;
-        }
-
-        .container form button:hover {
-            background-color: #048751; /* Darker green on hover */
-        }
-
-        /* Responsive adjustments for smaller screens */
-        @media screen and (max-width: 600px) {
-            nav .navbar-links {
-                float: none;
-                display: block;
-                text-align: center;
-            }
-            nav .navbar-links a {
-                display: block;
-                text-align: center;
-            }
-            nav .navbar-logo {
-                float: none;
-                text-align: center;
-            }
-            .container {
-                width: 95%;
-            }
+        .submit-button {
+            @apply w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out mt-6;
         }
     </style>
 </head>
-<body>
-    <nav>
-        <div class="navbar-logo">My App</div> <!-- This div will be styled by "nav .navbar-logo" -->
-        <div class="navbar-links">
-          <a href="/" class="active">Home</a>
-          <a href="/display">Videos</a>
-          <a href="/playlists">Playlists</a>
-          <!-- Note: The .upload-btn class on the <a> tag will be styled by "nav .upload-btn" -->
-          <a href="/upload" class="upload-btn">Upload Data</a>
+<body class="bg-gray-100">
+    <!-- Navbar -->
+    <nav class="bg-gray-800 text-white shadow-md px-6 py-4 flex justify-between items-center">
+        <div class="text-xl font-bold">My App</div>
+        <div class="flex space-x-3 text-sm">
+            <a href="/" class="<%= currentRoute === '/' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Home</a>
+            <a href="/display" class="<%= currentRoute === '/display' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Videos</a>
+            <a href="/playlists" class="<%= currentRoute === '/playlists' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Playlists</a>
+            <a href="/dhun-dashboard" class="<%= currentRoute === '/dhun-dashboard' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Dhun Dashboard</a>
+            <a href="/kirtan-dashboard" class="<%= currentRoute === '/kirtan-dashboard' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Kirtan Dashboard</a>
+            <a href="/kirtan-playlist" class="<%= currentRoute === '/kirtan-playlist' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Kirtan Playlist</a>
+            <a href="/dhun-playlist" class="<%= currentRoute === '/dhun-playlist' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Dhun Playlist</a>
+            <a href="/upload" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-semibold">Upload Data</a>
+            <a href="/video-filters" class="<%= currentRoute === '/video-filters' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Video Filters</a>
         </div>
-      </nav>
+    </nav>
 
     <div class="container">
-        <h2>Edit Video</h2>
-        <form action="/edit/<%= video.video_id %>" method="POST">
-            <label>Video Title:</label>
-            <input type="text" name="video_title" value="<%= video.video_title %>" required>
+        <h1 class="text-2xl font-bold text-blue-700 text-center mb-6">Edit Video Details</h1>
+        <% if (typeof video !== 'undefined') { %>
+            <form action="/edit/<%= video.db_id %>" method="POST" class="space-y-4">
+                <div>
+                    <label for="video_title" class="form-label">Video Title:</label>
+                    <input type="text" id="video_title" name="video_title" value="<%= video.video_title %>" required class="form-input">
+                </div>
 
-            <label>Category:</label>
-            <input type="text" name="category_name" value="<%= video.category_name %>" required>
+                <div>
+                    <label for="type_name" class="form-label">Type:</label>
+                    <!-- For a better UX, this should be a dropdown populated from your types table -->
+                    <input type="text" id="type_name" name="type_name" value="<%= video.type_name || '' %>" class="form-input">
+                </div>
 
-            <label>Sub Category:</label>
-            <input type="text" name="sub_category_name" value="<%= video.sub_category_name %>" required>
+                <div>
+                    <label for="category_name" class="form-label">Category:</label>
+                    <!-- For a better UX, this should be a dropdown populated from your categories table -->
+                    <input type="text" id="category_name" name="category_name" value="<%= video.category_name || '' %>" class="form-input">
+                </div>
+                
+                <!-- Katha specific details, conditionally shown if applicable -->
+                <% if (video.orator !== undefined || video.sabha_number !== undefined || video.granth_name !== undefined) { %>
+                    <h2 class="text-xl font-semibold text-gray-700 pt-4">Katha Details</h2>
+                    <div>
+                        <label for="orator" class="form-label">Orator:</label>
+                        <input type="text" id="orator" name="orator" value="<%= video.orator || '' %>" class="form-input">
+                    </div>
 
-            <label>Orator:</label>
-            <input type="text" name="orator" value="<%= video.orator || '' %>">
+                    <div>
+                        <label for="sabha_number" class="form-label">Sabha Number:</label>
+                        <input type="text" id="sabha_number" name="sabha_number" value="<%= video.sabha_number || '' %>" class="form-input">
+                    </div>
+                    <div>
+                        <label for="granth_name" class="form-label">Granth Name:</label>
+                        <input type="text" id="granth_name" name="granth_name" value="<%= video.granth_name || '' %>" class="form-input">
+                    </div>
+                <% } %>
+                
+                <!-- You can add more fields here as needed, e.g., for Dhun specific details -->
 
-            <label>Sabha Number:</label>
-            <input type="number" name="sabha_number" value="<%= video.sabha_number || 0 %>">
-
-            <button type="submit">Update</button>
-        </form>
+                <button type="submit" class="submit-button">Update Video</button>
+            </form>
+        <% } else { %>
+            <p class="text-center text-red-500">Video data not found or could not be loaded.</p>
+        <% } %>
     </div>
 </body>
 </html>

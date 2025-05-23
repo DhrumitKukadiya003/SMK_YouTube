@@ -1,0 +1,47 @@
+<% if (totalPages > 1) { %>
+    <div class="mt-6 flex justify-center items-center space-x-2 text-sm">
+        <%# Previous Page Link %>
+        <% if (currentPage > 1) { %>
+            <a href="<%= baseUrl %>?page=<%= currentPage - 1 %>&limit=<%= limit %>" class="pagination-link">&laquo; Previous</a>
+        <% } else { %>
+            <span class="pagination-link disabled-link">&laquo; Previous</span>
+        <% } %>
+
+        <%# Page Number Links Logic %>
+        <%
+            let PstartPage = Math.max(1, currentPage - 2);
+            let PendPage = Math.min(totalPages, currentPage + 2);
+            const maxVisiblePages = 5; // Maximum number of page links to show (e.g., 1 ... 4 5 6 ... 10)
+
+            if (totalPages <= maxVisiblePages) {
+                PstartPage = 1;
+                PendPage = totalPages;
+            } else {
+                if (currentPage <= Math.ceil(maxVisiblePages / 2)) {
+                    PstartPage = 1;
+                    PendPage = maxVisiblePages;
+                } else if (currentPage + Math.floor(maxVisiblePages / 2) >= totalPages) {
+                    PstartPage = totalPages - maxVisiblePages + 1;
+                    PendPage = totalPages;
+                } else {
+                    PstartPage = currentPage - Math.floor(maxVisiblePages / 2);
+                    PendPage = currentPage + Math.floor(maxVisiblePages / 2);
+                }
+            }
+        %>
+
+        <% for (let i = PstartPage; i <= PendPage; i++) { %>
+            <a href="<%= baseUrl %>?page=<%= i %>&limit=<%= limit %>"
+               class="pagination-link <%= i === currentPage ? 'bg-blue-600 text-white border-blue-600 font-semibold shadow-sm' : '' %>">
+                <%= i %>
+            </a>
+        <% } %>
+
+        <%# Next Page Link %>
+        <% if (currentPage < totalPages) { %>
+            <a href="<%= baseUrl %>?page=<%= currentPage + 1 %>&limit=<%= limit %>" class="pagination-link">Next &raquo;</a>
+        <% } else { %>
+            <span class="pagination-link disabled-link">Next &raquo;</span>
+        <% } %>
+    </div>
+<% } %>

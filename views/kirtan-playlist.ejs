@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dhun Playlist</title>
+    <title>Kirtan Playlist</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,7 +15,7 @@
             font-family: 'Inter', sans-serif;
         }
         .active-nav-link {
-            @apply text-white font-bold px-3 py-2 rounded-md text-sm; /* Adjusted for bold text, no background/shadow */
+            @apply text-white font-bold px-3 py-2 rounded-md text-sm;
         }
         .pagination-link {
           @apply px-3 py-1 border border-gray-300 bg-white rounded hover:bg-blue-100;
@@ -23,7 +23,7 @@
         .disabled-link {
           @apply text-gray-400 bg-gray-100 cursor-not-allowed;
         }
-        .export-button { /* Added for consistency if you want to style it like other export buttons */
+        .export-button { 
           @apply bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-300;
         }
     </style>
@@ -38,8 +38,8 @@
             <a href="/playlists" class="<%= currentRoute === '/playlists' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Playlists</a>
             <a href="/dhun-dashboard" class="<%= currentRoute === '/dhun-dashboard' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Dhun Dashboard</a>
             <a href="/kirtan-dashboard" class="<%= currentRoute === '/kirtan-dashboard' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Kirtan Dashboard</a>
-            <a href="/kirtan-playlist" class="<%= currentRoute === '/kirtan-playlist' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Kirtan Playlist</a>
             <a href="/dhun-playlist" class="<%= currentRoute === '/dhun-playlist' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Dhun Playlist</a>
+            <a href="/kirtan-playlist" class="<%= currentRoute === '/kirtan-playlist' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Kirtan Playlist</a>
             <a href="/upload" class="bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-md text-sm">Upload Data</a>
             <a href="/video-filters" class="<%= currentRoute === '/video-filters' ? 'active-nav-link' : 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm' %>">Video Filters</a>
         </div>
@@ -48,7 +48,7 @@
     <!-- Page Content -->
     <div class="p-6">
         <div class="max-w-7xl mx-auto bg-white shadow-lg rounded-lg p-8">
-            <h1 class="text-3xl font-bold text-blue-600 text-center mb-6">Dhun Playlist</h1>
+            <h1 class="text-3xl font-bold text-blue-600 text-center mb-6">Kirtan Playlist</h1>
 
             <!-- Actions: Records per page and Export -->
             <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
@@ -60,11 +60,11 @@
                   <option value="50" <% if (limit == 50) { %> selected <% } %>>50</option>
                   <option value="100" <% if (limit == 100) { %> selected <% } %>>100</option>
                   <% if (totalRecords > 0) { %>
-                    <option value="all" <% if (limit >= totalRecords) { %> selected <% } %>>All (<%= totalRecords %>)</option>
+                    <option value="all" <% if (limit >= totalRecords && totalRecords > 0) { %> selected <% } %>>All (<%= totalRecords %>)</option>
                   <% } %>
                 </select>
               </div>
-              <a href="<%= exportUrl %>" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-300">
+              <a href="<%= exportUrl %>" class="export-button">
                   📤 Export to Excel
               </a>
             </div>
@@ -102,46 +102,10 @@
                     </table>
                 </div>
 
-                <!-- Pagination -->
-                <div class="flex justify-center space-x-2 text-sm">
-                    <% if (currentPage > 1) { %>
-                      <a href="?page=<%= currentPage - 1 %>&limit=<%= limit %>" class="pagination-link">Previous</a>
-                    <% } else { %>
-                      <span class="pagination-link disabled-link">Previous</span>
-                    <% } %>
-            
-                    <%
-                      let startPage = Math.max(1, currentPage - 2);
-                      let endPage = Math.min(totalPages, currentPage + 2);
-            
-                      if (totalPages <= 5) {
-                        startPage = 1;
-                        endPage = totalPages;
-                      } else if (currentPage <= 3) {
-                        startPage = 1;
-                        endPage = 5;
-                      } else if (currentPage >= totalPages - 2) {
-                        startPage = totalPages - 4;
-                        endPage = totalPages;
-                      }
-                    %>
-            
-                    <% for (let i = startPage; i <= endPage; i++) { %>
-                      <% if (i === currentPage) { %>
-                        <span class="pagination-link bg-blue-600 text-white font-semibold shadow-sm"><%= i %></span>
-                      <% } else { %>
-                        <a href="?page=<%= i %>&limit=<%= limit %>" class="pagination-link"><%= i %></a>
-                      <% } %>
-                    <% } %>
-            
-                    <% if (currentPage < totalPages) { %>
-                      <a href="?page=<%= currentPage + 1 %>&limit=<%= limit %>" class="pagination-link">Next</a>
-                    <% } else { %>
-                      <span class="pagination-link disabled-link">Next</span>
-                    <% } %>
-                </div>
+                <!-- Pagination (copied from dhun-playlist.ejs, ensure it works with /kirtan-playlist route) -->
+                <%- include('./partials/pagination', { currentPage, totalPages, limit, baseUrl: '/kirtan-playlist' }) %>
             <% } else { %>
-                <p class="text-center text-gray-500 mt-6">No videos found in the Dhun playlist.</p>
+                <p class="text-center text-gray-500 mt-6">No videos found in the Kirtan playlist.</p>
             <% } %>
         </div>
     </div>
@@ -149,9 +113,7 @@
     <script>
       function changeLimit() {
         const limitValue = document.getElementById('recordsPerPage').value;
-        // When changing limit, always go to page 1
-        window.location.href = `/dhun-playlist?page=1&limit=${limitValue}`;
+        window.location.href = `/kirtan-playlist?page=1&limit=${limitValue}`;
       }
     </script>
 </body>
-</html>

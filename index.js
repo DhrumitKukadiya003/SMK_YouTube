@@ -39,9 +39,13 @@ app.use(express.static('public')); // Serve static files from 'public' directory
 const DHUN_DATA_TABLE = 'dhun_dashboard_data';
 const KIRTAN_DATA_TABLE = 'kirtan_dashboard_data'; // New table for Kirtan
 const DHUN_PLAYLIST_TABLE = 'dhun_playlist';
+const KIRTAN_PLAYLIST_TABLE = 'kirtan_playlist'; // New table for Kirtan Playlist
 const STREAMED_DHUN_TABLE = 'streamed_dhun_table';
 const LYRICAL_DHUN_TABLE = 'lyrical_video_dhun_table';
 const DHUN_JUKEBOX_TABLE = 'dhun_jukebox_table';
+const STREAMED_KIRTAN_TABLE = 'streamed_kirtan_table'; // New specific kirtan table
+const LYRICAL_KIRTAN_TABLE = 'lyrical_video_kirtan_table'; // New specific kirtan table
+const KIRTAN_JUKEBOX_TABLE = 'kirtan_jukebox_table'; // New specific kirtan table
 const VIDEO_FILTERS_TABLE = 'video_filters';
 const VIDEOS_TABLE = 'videos';
 const PLAYLISTS_TABLE = 'playlists';
@@ -316,6 +320,7 @@ async function generateDhunPlaylist(client) {
     }
 }
 
+
 /**
  * Refreshes the main Kirtan dashboard data table by querying the core video tables.
  * @param {pg.Client} client - The PostgreSQL client.
@@ -355,9 +360,182 @@ async function refreshKirtanDashboardData(client) {
         await client.query(query);
         const countResult = await client.query(`SELECT COUNT(*) FROM ${KIRTAN_DATA_TABLE}`);
         console.log(`Kirtan dashboard data refreshed successfully. Total rows in ${KIRTAN_DATA_TABLE}: ${countResult.rows[0].count}`);
+
+        // Refresh the specific kirtan tables based on the newly populated dashboard data
+        await refreshSpecificKirtanTables(client);
+        // console.log(`Kirtan dashboard data refreshed successfully. Total rows in ${KIRTAN_DATA_TABLE}: ${countResult.rows[0].count}`); // Duplicate log
     } catch (error) {
         console.error('Error refreshing kirtan dashboard data:', error);
         throw error; // Re-throw error
+    }
+}
+
+/**
+ * Refreshes derived tables storing specific types of Kirtan videos.
+ * @param {pg.Client} client - The PostgreSQL client.
+ */
+async function refreshSpecificKirtanTables(client) {
+    console.log('Refreshing specific kirtan tables...');
+    try {
+        // Define your kirtan categories and their conditions here.
+        // These are examples; you'll need to adjust them based on your data.
+        // IMPORTANT: Update these conditions to match your actual data structure for kirtan types/categories.
+         const tablesToRefresh = [
+            { name: STREAMED_KIRTAN_TABLE, condition: "LOWER(type_name) LIKE '%kirtan%' AND LOWER(category_name) LIKE '%streamed kirtan%'" },
+            { name: LYRICAL_KIRTAN_TABLE, condition: "LOWER(type_name) LIKE '%kirtan%' AND LOWER(category_name) LIKE '%lyrical video%'" }, // Adjust condition as needed
+            { name: KIRTAN_JUKEBOX_TABLE, condition: "LOWER(type_name) LIKE '%kirtan%' AND LOWER(category_name) LIKE '%kirtan jukebox%'" }
+        ];
+
+        for (const table of tablesToRefresh) {
+            await client.query(`DROP TABLE IF EXISTS ${table.name}`);
+            // Create table based on the main kirtan data table structure and filter
+            // It's important that these tables select from KIRTAN_DATA_TABLE
+            await client.query(`
+                CREATE TABLE ${table.name} AS
+                SELECT * FROM ${KIRTAN_DATA_TABLE}
+                WHERE ${table.condition}
+            `);
+            const countResult = await client.query(`SELECT COUNT(*) FROM ${table.name}`);
+            console.log(`${table.name} refreshed. Rows: ${countResult.rows[0].count}`);
+        }
+    } catch (error) {
+        console.error('Error refreshing specific kirtan tables:', error);
+        throw error; // Re-throw error to be caught by caller
+    }
+}
+
+/**
+ * Generates the Kirtan playlist based on refreshed Kirtan dashboard data.
+ * @param {pg.Client} client - The PostgreSQL client.
+ */
+async function generateKirtanPlaylist(client) {
+    console.log('Generating kirtan playlist...');
+    try {
+        // Drop existing playlist table
+        await client.query(`DROP TABLE IF EXISTS ${KIRTAN_PLAYLIST_TABLE}`);
+
+        // Create the playlist table structure (mirroring dhun_playlist structure)
+        await client.query(`
+            CREATE TABLE ${KIRTAN_PLAYLIST_TABLE} (
+                id SERIAL PRIMARY KEY,
+                video_db_id INTEGER NOT NULL,
+                video_id VARCHAR(255) NOT NULL,
+                video_title VARCHAR(255) NOT NULL,
+                channel_id VARCHAR(255),
+                type_name VARCHAR(255),
+                category_name VARCHAR(255),
+                playlist_id TEXT,
+                playlist_name TEXT,
+                playlist_order INTEGER NOT NULL,
+                FOREIGN KEY (video_db_id) REFERENCES videos(id) ON DELETE CASCADE
+            )
+        `);
+
+        // Fetch data from the refreshed specific kirtan tables
+        const liveKirtanRes = await client.query(`SELECT * FROM ${STREAMED_KIRTAN_TABLE}`);
+        const studioKirtanRes = await client.query(`SELECT * FROM ${LYRICAL_KIRTAN_TABLE}`);
+        const instrumentalKirtanRes = await client.query(`SELECT * FROM ${KIRTAN_JUKEBOX_TABLE}`);
+
+        let liveKirtans = liveKirtanRes.rows;
+        let studioKirtans = studioKirtanRes.rows;
+        let instrumentalKirtans = instrumentalKirtanRes.rows;
+
+        if (liveKirtans.length === 0) {
+            console.log(`No live kirtan videos available from ${LIVE_KIRTAN_TABLE} for playlist generation. Kirtan playlist might be empty or sparsely populated.`);
+            if (studioKirtans.length === 0 && instrumentalKirtans.length === 0) {
+                 console.log('All specific kirtan categories are empty. Kirtan playlist will be empty.');
+                 return;
+            }
+        }
+
+        const shuffleArray = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        };
+
+        shuffleArray(liveKirtans);
+        shuffleArray(studioKirtans);
+        shuffleArray(instrumentalKirtans);
+
+        let playlist = [];
+        let liveIndex = 0, studioIndex = 0, instrumentalIndex = 0;
+        let order = 1; // This 'order' is for assigning playlist_order
+
+        const getNextItem = (arr, index) => {
+            if (!arr || arr.length === 0) return null;
+            return arr[index % arr.length];
+        };
+
+        // Apply Dhun-like playlist generation logic
+        while (liveIndex < liveKirtans.length) {
+            // Repeat 4 times: 4 live + 1 studio (if available)
+            for (let repeat = 0; repeat < 4; repeat++) {
+                // Add 4 live kirtans
+                for (let i = 0; i < 4 && liveIndex < liveKirtans.length; i++) {
+                    const item = liveKirtans[liveIndex++];
+                    playlist.push({ ...item, playlist_order: order++ });
+                }
+                // Add 1 studio kirtan (if available)
+                const studioItem = getNextItem(studioKirtans, studioIndex++);
+                if (studioItem) {
+                    playlist.push({ ...studioItem, playlist_order: order++ });
+                }
+            }
+
+            // Then add 1 instrumental kirtan (if available)
+            const instrumentalItem = getNextItem(instrumentalKirtans, instrumentalIndex++);
+            if (instrumentalItem) {
+                playlist.push({ ...instrumentalItem, playlist_order: order++ });
+            }
+        }
+        
+        // Fallback: if no live kirtans but other types exist, or if the loop didn't populate enough
+        // and other kirtans are still available.
+        if (playlist.length === 0 && (studioKirtans.length > 0 || instrumentalKirtans.length > 0)) {
+            console.log("No live kirtans or main loop didn't run, but other kirtan types exist. Populating with available kirtans.");
+            let remainingKirtans = [];
+            if (studioKirtans.length > 0) remainingKirtans.push(...studioKirtans);
+            if (instrumentalKirtans.length > 0) remainingKirtans.push(...instrumentalKirtans);
+            
+            // Filter out already added items if any (though unlikely if playlist.length is 0)
+            const playlistVideoIds = new Set(playlist.map(v => v.video_id));
+            remainingKirtans = remainingKirtans.filter(v => !playlistVideoIds.has(v.video_id));
+
+            shuffleArray(remainingKirtans);
+            for(const item of remainingKirtans) {
+                playlist.push({ ...item, playlist_order: order++ });
+            }
+        }
+
+
+        if (playlist.length === 0) {
+            console.log('Kirtan playlist is empty after attempting pattern generation.');
+            return;
+        }
+
+        for (const video of playlist) {
+            if (!video.video_db_id) {
+                console.warn(`Skipping kirtan playlist entry due to missing video_db_id for video_id: ${video.video_id}`);
+                continue;
+            }
+            await client.query(
+                `INSERT INTO ${KIRTAN_PLAYLIST_TABLE} (
+                    video_db_id, video_id, video_title, channel_id, type_name,
+                    category_name, playlist_id, playlist_name, playlist_order
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [
+                    video.video_db_id, video.video_id, video.video_title, video.channel_id,
+                    video.type_name, video.category_name, video.playlist_id, video.playlist_name, video.playlist_order
+                ]
+            );
+        }
+        const playlistCountResult = await client.query(`SELECT COUNT(*) FROM ${KIRTAN_PLAYLIST_TABLE}`);
+        console.log(`Kirtan Playlist Generated. Total rows in ${KIRTAN_PLAYLIST_TABLE}: ${playlistCountResult.rows[0].count}`);
+    } catch (error) {
+        console.error('Error generating Kirtan Playlist:', error);
+        throw error;
     }
 }
 
@@ -481,7 +659,7 @@ async function applyFilters(data, client) {
                     }
                 }
             }
-        }1
+        }
         console.log('Filter application complete. Matching videos set to is_active=false.');
     } catch (error) {
         console.error('Error applying filters:', error);
@@ -656,9 +834,12 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
             // Refresh derived Dhun data, Kirtan data, and generate Dhun playlist
             console.log('Triggering refresh of Dhun data and playlist...');
             await refreshDhunDashboardData(client);
+            
             console.log('Triggering refresh of Kirtan data...');
-            await refreshKirtanDashboardData(client); // Add call to refresh Kirtan data
-
+            await refreshKirtanDashboardData(client); // This will now also call refreshSpecificKirtanTables
+            
+            await generateKirtanPlaylist(client); // Generate Kirtan playlist after Kirtan data is refreshed
+            
             await client.query('COMMIT');
             console.log('Upload process committed successfully.');
             res.redirect('/display?page=1&limit=10');
@@ -758,10 +939,15 @@ app.get('/display', async (req, res) => {
 // Show Edit Form
 app.get('/edit/:dbId', async (req, res) => {
     const { dbId } = req.params;
+    const parsedDbId = parseInt(dbId, 10);
+
+    if (isNaN(parsedDbId)) {
+        return res.status(400).send('Invalid video ID format. Video ID must be an integer.');
+    }
+
      let client;
     try {
         client = await pool.connect();
-        // Fetch video details including playlist name, type name, and category name (updated joins and selected columns)
         const query = `
             SELECT
                 v.id AS db_id,
@@ -781,8 +967,8 @@ app.get('/edit/:dbId', async (req, res) => {
             LEFT JOIN ${PLAYLISTS_TABLE} p ON v.playlist_id = p.playlist_id
             LEFT JOIN ${KATHA_DETAILS_TABLE} kd ON v.id = kd.video_id
             WHERE v.id = $1
-        `;
-        const result = await client.query(query, [dbId]);
+        `; // The query correctly expects an integer for v.id
+        const result = await client.query(query, [parsedDbId]);
 
 
         if (result.rows.length === 0) {
@@ -790,14 +976,16 @@ app.get('/edit/:dbId', async (req, res) => {
             return res.status(404).send('Video not found.');
         }
 
-        // TODO: Fetch lists of types, categories, playlists if needed for dropdowns in edit form
+        // For a complete edit form, you'll likely want to fetch lists for dropdowns:
         // const types = await client.query(`SELECT type_id, type_name FROM ${TYPES_TABLE} ORDER BY type_name`);
         // const categories = await client.query(`SELECT category_id, category_name FROM ${CATEGORIES_TABLE} ORDER BY category_name`);
         // const playlists = await client.query(`SELECT playlist_id, playlist_name FROM ${PLAYLISTS_TABLE} ORDER BY playlist_name`);
 
-
         res.render('edit', {
-            video: result.rows[0]
+            video: result.rows[0],
+            currentRoute: req.path // For consistent navbar highlighting
+            // types: types.rows,
+            // categories: categories.rows,
             // Pass types: types.rows, categories: categories.rows, playlists: playlists.rows etc. if needed
         });
 
@@ -812,13 +1000,17 @@ app.get('/edit/:dbId', async (req, res) => {
 // Handle Edit Form Submission
 app.post('/edit/:dbId', async (req, res) => {
     const { dbId } = req.params;
-    // Extract relevant fields from form body - adjust based on your edit.ejs form
-    // Note: category_id and sub_category_id from the form would now correspond to type_id and category_id in the DB
-    const {
-        video_title, channel_id, /* type_id, category_id, playlist_id, orator, sabha_number, granth_name */
-    } = req.body;
+    const parsedDbId = parseInt(dbId, 10);
 
-    // Basic validation example
+    if (isNaN(parsedDbId)) {
+        return res.status(400).send('Invalid video ID format. Video ID must be an integer.');
+    }
+
+    // Extract fields from form body. Adjust these based on your actual edit.ejs form.
+    // For this example, we'll only handle video_title.
+    // You'll need to expand this to handle other fields like type, category, orator, sabha_number, etc.
+    const { video_title /*, type_name, category_name, orator, sabha_number, granth_name */ } = req.body;
+
     if (!video_title) {
         return res.status(400).send('Video title cannot be empty.');
     }
@@ -826,31 +1018,38 @@ app.post('/edit/:dbId', async (req, res) => {
      let client;
     try {
         client = await pool.connect();
-        // Update the video details. Add more fields to SET clause as needed.
-        // Ensure playlist_name in videos table is updated if playlist_id changes (or remove it)
-        // Updated UPDATE query to match new column names (type_id, category_id)
+        await client.query('BEGIN');
+
+        // Example: Update only video_title in the videos table.
+        // You will need to expand this query and potentially update other tables (e.g., katha_details)
+        // and handle lookups for type_id and category_id if type_name/category_name are edited.
         const updateQuery = `
             UPDATE ${VIDEOS_TABLE}
-            SET video_title = $1,
-                channel_id = $2
-                /* , type_id = $3, category_id = $4, playlist_id = $5 */ -- Adjusted column names
-            WHERE id = $6
+            SET video_title = $1
+            /*
+                , channel_id = $2  -- If channel_id is editable and sent from form
+                , type_id = $X     -- Look up type_id based on type_name from form
+                , category_id = $Y -- Look up category_id based on category_name from form
+                , playlist_id = $Z -- If playlist_id is editable
+            */
+            WHERE id = $2
         `;
-        await client.query(updateQuery, [
-            video_title, channel_id, /* type_id, category_id, playlist_id, */ dbId
-        ]);
+        await client.query(updateQuery, [video_title, parsedDbId]);
 
-        // If katha details are editable, update katha_details table too
+        // Example: If katha details (orator, sabha_number, granth_name) are edited, update katha_details table.
+        // const { orator, sabha_number, granth_name } = req.body;
         // const updateKathaQuery = `UPDATE ${KATHA_DETAILS_TABLE} SET ... WHERE video_id = $1`;
-        // await client.query(updateKathaQuery, [dbId]);
+        // await client.query(updateKathaQuery, [parsedDbId, orator, sabha_number, granth_name]);
 
         // IMPORTANT: After editing, you might need to refresh the Dhun data
         // if the changes affect Dhun classification (e.g., type/category change)
         console.log('Video updated, triggering Dhun data refresh...');
         // Use a transaction if updating multiple tables and refreshing
-        await client.query('BEGIN');
+        // await client.query('BEGIN'); // Already in a transaction
         await refreshDhunDashboardData(client);
-        await client.query('COMMIT');
+        await refreshKirtanDashboardData(client); // Also refresh Kirtan data if relevant
+        await generateKirtanPlaylist(client); // And Kirtan playlist
+        await client.query('COMMIT'); // Commit the main transaction
 
 
         res.redirect('/display'); // Redirect back to the main display page
@@ -1126,6 +1325,66 @@ app.get('/dhun-playlist/export', (req, res) => {
     exportToExcel(res, query, 'Dhun_Playlist');
 });
 
+// --- Kirtan Playlist Routes ---
+app.get('/kirtan-playlist', async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        let requestedLimit = req.query.limit;
+        let limit = parseInt(requestedLimit) || 10;
+
+        const client = await pool.connect();
+        try {
+            const countQuery = `SELECT COUNT(*) FROM ${KIRTAN_PLAYLIST_TABLE}`;
+            const countResult = await client.query(countQuery);
+            const totalRecords = parseInt(countResult.rows[0].count);
+
+            if (requestedLimit === 'all') {
+                limit = totalRecords > 0 ? totalRecords : 1;
+            }
+
+            const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
+            const offset = (page > 0 ? page - 1 : 0) * limit;
+
+            const query = `
+                SELECT playlist_order, video_id, video_title, channel_id, type_name, category_name, playlist_id, playlist_name
+                FROM ${KIRTAN_PLAYLIST_TABLE}
+                ORDER BY playlist_order ASC
+                LIMIT $1 OFFSET $2;
+            `;
+            const result = await client.query(query, [limit, offset]);
+
+            res.render('kirtan-playlist', { // Ensure you create kirtan-playlist.ejs
+                playlist: result.rows,
+                exportUrl: '/kirtan-playlist/export',
+                currentRoute: req.path,
+                currentPage: page > 0 ? page : 1,
+                totalPages: totalPages,
+                limit: limit, 
+                totalRecords: totalRecords
+            });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Error loading Kirtan Playlist:', error);
+        if (error.code === '42P01') { 
+             res.status(404).send('Kirtan playlist has not been generated yet. Please upload data first.');
+        } else {
+            res.status(500).send('Failed to load Kirtan Playlist');
+        }
+    }
+});
+
+// Export Kirtan Playlist Data
+app.get('/kirtan-playlist/export', (req, res) => {
+    const query = `
+        SELECT video_db_id, video_id, video_title, channel_id, type_name,
+               category_name, playlist_id, playlist_name, playlist_order
+        FROM ${KIRTAN_PLAYLIST_TABLE}
+        ORDER BY playlist_order ASC
+    `;
+    exportToExcel(res, query, 'Kirtan_Playlist');
+});
 
 // --- Video Filter Management Routes ---
 
