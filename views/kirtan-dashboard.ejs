@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dhun Dashboard</title>
+  <title>Kirtan Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
 
@@ -11,8 +11,8 @@
     body {
       font-family: 'Inter', sans-serif;
     }
-    .active-nav-link { /* Standardized class name */
-      @apply text-white font-bold px-3 py-2 rounded-md text-sm; /* Adjusted for bold text, no background/shadow */
+    .active-nav-link { 
+        @apply text-white font-bold px-3 py-2 rounded-md text-sm; /* Adjusted for bold text, no background/shadow */
     }
     .export-button {
       @apply bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded transition duration-300 shadow-md;
@@ -46,7 +46,7 @@
   <!-- Page Content -->
   <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
     <div class="bg-white shadow-md rounded-lg p-6 sm:p-8">
-      <h1 class="text-2xl font-bold text-blue-700 text-center mb-6">Dhun Dashboard</h1>
+      <h1 class="text-2xl font-bold text-blue-700 text-center mb-6">Kirtan Dashboard</h1>
 
       <!-- Export Button -->
       <div class="flex justify-end mb-4">
@@ -72,13 +72,13 @@
           <tbody class="divide-y divide-gray-200">
             <% videos.forEach(video => { %>
               <tr class="hover:bg-gray-100 odd:bg-gray-50">
-                <td class="px-5 py-4 text-sm text-gray-900"><%= video.video_id %></td>
-                <td class="px-5 py-4 text-sm text-gray-900"><%= video.playlist_id %></td>
-                <td class="px-5 py-4 text-sm text-gray-900"><%= video.playlist_name %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><a href="https://www.youtube.com/watch?v=<%= video.video_id %>" target="_blank" class="text-blue-600 hover:underline"><%= video.video_id %></a></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.playlist_id || 'N/A' %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.playlist_name || 'N/A' %></td>
                 <td class="px-5 py-4 text-sm text-gray-900"><%= video.video_title %></td>
-                <td class="px-5 py-4 text-sm text-gray-900"><%= video.channel_id %></td>
-                <td class="px-5 py-4 text-sm text-gray-900"><%= video.type_name %></td>
-                <td class="px-5 py-4 text-sm text-gray-900"><%= video.category_name %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.channel_id || 'N/A' %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.type_name || 'N/A' %></td>
+                <td class="px-5 py-4 text-sm text-gray-900"><%= video.category_name || 'N/A' %></td>
               </tr>
             <% }) %>
           </tbody>
@@ -123,6 +123,10 @@
           <span class="pagination-link disabled-link">Next</span>
         <% } %>
       </div>
+
+      <% if (!videos || videos.length === 0) { %>
+        <p class="text-center text-gray-500 mt-6">No Kirtan videos found in the dashboard.</p>
+      <% } %>
 
     </div>
   </main>
