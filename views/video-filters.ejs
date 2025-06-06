@@ -97,7 +97,7 @@
         </div>
       </div>
 
-      <!-- Import/Export -->
+        <!-- Import/Export -->
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">
         <a href="<%= exportUrl %>" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2 rounded-md">Export to Excel</a>
         <form action="/video-filters/import" method="post" enctype="multipart/form-data" class="flex items-center space-x-2">
@@ -105,11 +105,18 @@
           <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-2 rounded-md">Import from Excel</button>
         </form>
       </div>
-
+        <form action="/video-filters/apply" method="post" class="mt-6 text-center">
+          <button type="submit"
+              class="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline text-lg">
+              Apply Filter
+          </button>
+      </form>
+      <% if (typeof applied !== 'undefined') { %>
+          <div class="mt-4 text-green-600 font-semibold">Filters applied. Videos table updated.</div>
+      <% } %>
       <div class="mt-8 text-center">
         <a href="/display" class="text-blue-600 hover:underline font-medium text-lg">← Back to Display Page</a>
       </div>
-
     </div>
   </div>
 

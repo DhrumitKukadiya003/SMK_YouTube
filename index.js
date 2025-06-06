@@ -399,10 +399,14 @@ async function refreshSpecificKirtanTables(client) {
             console.log(`${table.name} refreshed. Rows: ${countResult.rows[0].count}`);
         }
     } catch (error) {
-        console.error('Error refreshing specific kirtan tables:', error);
-        throw error; // Re-throw error to be caught by caller
+        console.error('Error checking database:', error);
+        res.status(500).send('Internal Server Error');
     }
-}
+});
+
+app.get('/upload', (req, res) => {
+    res.render('index');
+});
 
 /**
  * Generates the Kirtan playlist based on refreshed Kirtan dashboard data.
@@ -539,7 +543,8 @@ async function generateKirtanPlaylist(client) {
     }
 }
 
-// --- Filter Application Function ---
+
+
 /**
  * Applies exclusion filters from the database to the uploaded data.
  * @param {Array} data - The video data extracted from the Excel file.
@@ -549,7 +554,7 @@ async function generateKirtanPlaylist(client) {
 async function applyFilters(data, client) {
     console.log('Applying filters (will update is_active=false for matches)...');
     try {
-        const filterResults = await client.query(`SELECT filter_type, filter_value FROM ${VIDEO_FILTERS_TABLE}`);
+        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
         const filters = filterResults.rows;
 
         if (filters.length === 0) {
@@ -860,6 +865,111 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
     }
 });
 
+async function getFilteredVideoIds(data, client) {
+    // Fetch filters once
+    const FILTERS_TABLE = 'video_filters';
+    const filterResults = await client.query(`SELECT * FROM ${FILTERS_TABLE}`);
+    const filters = filterResults.rows;
+
+    if (filters.length === 0) {
+        return new Set(); // No filters, nothing to mark inactive
+    }
+
+    // Preprocess filters
+    const videoIdSet = new Set();
+    const playlistIdSet = new Set();
+    const privacyStatusSet = new Set();
+    const videoTitleFilters = [];
+    const playlistNameFilters = [];
+
+    for (const filter of filters) {
+        switch (filter.filter_type) {
+            case 'video_id':
+                videoIdSet.add(filter.filter_value);
+                break;
+            case 'playlist_id':
+                playlistIdSet.add(filter.filter_value);
+                break;
+            case 'privacy_status':
+                privacyStatusSet.add(filter.filter_value.toLowerCase());
+                break;
+            case 'video_title':
+                videoTitleFilters.push(filter.filter_value.toLowerCase());
+                break;
+            case 'playlist_name':
+                playlistNameFilters.push(filter.filter_value.toLowerCase());
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Find video IDs that match any filter
+    const filteredIds = new Set();
+    for (const item of data) {
+        if (videoIdSet.has(item['Video Id'])) { filteredIds.add(item['Video Id']); continue; }
+        if (playlistIdSet.has(item['Playlist Id'])) { filteredIds.add(item['Video Id']); continue; }
+        if (privacyStatusSet.has((item['Privacy Status'] || '').toLowerCase())) { filteredIds.add(item['Video Id']); continue; }
+        const itemTitle = (item['Video Title'] || '').toLowerCase();
+        if (videoTitleFilters.some(f => itemTitle.includes(f))) { filteredIds.add(item['Video Id']); continue; }
+        const itemName = (item['Playlist Name'] || '').toLowerCase();
+        if (playlistNameFilters.some(f => itemName.includes(f))) { filteredIds.add(item['Video Id']); continue; }
+    }
+    return filteredIds;
+}
+
+async function getFilteredVideoIds(data, client) {
+    // Fetch filters once
+    const FILTERS_TABLE = 'video_filters';
+    const filterResults = await client.query(`SELECT * FROM ${FILTERS_TABLE}`);
+    const filters = filterResults.rows;
+
+    if (filters.length === 0) {
+        return new Set(); // No filters, nothing to mark inactive
+    }
+
+    // Preprocess filters
+    const videoIdSet = new Set();
+    const playlistIdSet = new Set();
+    const privacyStatusSet = new Set();
+    const videoTitleFilters = [];
+    const playlistNameFilters = [];
+
+    for (const filter of filters) {
+        switch (filter.filter_type) {
+            case 'video_id':
+                videoIdSet.add(filter.filter_value);
+                break;
+            case 'playlist_id':
+                playlistIdSet.add(filter.filter_value);
+                break;
+            case 'privacy_status':
+                privacyStatusSet.add(filter.filter_value.toLowerCase());
+                break;
+            case 'video_title':
+                videoTitleFilters.push(filter.filter_value.toLowerCase());
+                break;
+            case 'playlist_name':
+                playlistNameFilters.push(filter.filter_value.toLowerCase());
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Find video IDs that match any filter
+    const filteredIds = new Set();
+    for (const item of data) {
+        if (videoIdSet.has(item['Video Id'])) { filteredIds.add(item['Video Id']); continue; }
+        if (playlistIdSet.has(item['Playlist Id'])) { filteredIds.add(item['Video Id']); continue; }
+        if (privacyStatusSet.has((item['Privacy Status'] || '').toLowerCase())) { filteredIds.add(item['Video Id']); continue; }
+        const itemTitle = (item['Video Title'] || '').toLowerCase();
+        if (videoTitleFilters.some(f => itemTitle.includes(f))) { filteredIds.add(item['Video Id']); continue; }
+        const itemName = (item['Playlist Name'] || '').toLowerCase();
+        if (playlistNameFilters.some(f => itemName.includes(f))) { filteredIds.add(item['Video Id']); continue; }
+    }
+    return filteredIds;
+}
 
 // --- Display Routes ---
 
@@ -1530,3 +1640,205 @@ app.post('/video-filters/import', upload.single('excelFile'), async (req, res) =
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
+/**
+ * POST /video-filters/apply
+ * Applies current filters to the videos table by setting is_active = false for matching videos.
+ */
+app.post('/video-filters/apply', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // Fetch all filters
+        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
+        const filters = filterResults.rows;
+        if (filters.length === 0) {
+            client.release();
+            return res.redirect('/video-filters');
+        }
+
+        // Fetch all videos
+        const videoResults = await client.query(`
+            SELECT v.id, v.video_id, v.video_title, v.playlist_id, v.channel_id, v.is_active, v.category_id, v.sub_category_id,
+                   p.playlist_name
+            FROM videos v
+            LEFT JOIN playlists p ON v.playlist_id = p.playlist_id
+        `);
+        const videos = videoResults.rows;
+
+        // Preprocess filters for efficient matching
+        const videoIdSet = new Set();
+        const playlistIdSet = new Set();
+        const privacyStatusSet = new Set();
+        const videoTitleFilters = [];
+        const playlistNameFilters = [];
+
+        for (const filter of filters) {
+            switch (filter.filter_type) {
+                case 'video_id':
+                    videoIdSet.add(filter.filter_value);
+                    break;
+                case 'playlist_id':
+                    playlistIdSet.add(filter.filter_value);
+                    break;
+                case 'privacy_status':
+                    privacyStatusSet.add(filter.filter_value.toLowerCase());
+                    break;
+                case 'video_title':
+                    videoTitleFilters.push(filter.filter_value.toLowerCase());
+                    break;
+                case 'playlist_name':
+                    playlistNameFilters.push(filter.filter_value.toLowerCase());
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // Find video IDs that match any filter
+        const filteredDbIds = [];
+        const allDbIds = [];
+        for (const video of videos) {
+            allDbIds.push(video.id);
+            let exclude = false;
+            if (videoIdSet.has(video.video_id)) { exclude = true; }
+            if (playlistIdSet.has(video.playlist_id)) { exclude = true; }
+            // privacy_status is not present in your schema, so skip
+            const itemTitle = (video.video_title || '').toLowerCase();
+            if (videoTitleFilters.some(f => itemTitle.includes(f))) { exclude = true; }
+            const itemName = (video.playlist_name || '').toLowerCase();
+            if (playlistNameFilters.some(f => itemName.includes(f))) { exclude = true; }
+            if (exclude) {
+                filteredDbIds.push(video.id);
+            }
+        }
+
+        // Compute non-filtered IDs
+        const filteredSet = new Set(filteredDbIds);
+        const nonFilteredDbIds = allDbIds.filter(id => !filteredSet.has(id));
+
+        await client.query('BEGIN');
+        // Set is_active = false for filtered videos
+        if (filteredDbIds.length > 0) {
+            await client.query(
+                `UPDATE videos SET is_active = false WHERE id = ANY($1::int[])`,
+                [filteredDbIds]
+            );
+        }
+        // Set is_active = true for non-filtered videos
+        if (nonFilteredDbIds.length > 0) {
+            await client.query(
+                `UPDATE videos SET is_active = true WHERE id = ANY($1::int[])`,
+                [nonFilteredDbIds]
+            );
+        }
+        await client.query('COMMIT');
+        client.release();
+        res.redirect('/video-filters?applied=1');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        client.release();
+        console.error('Error applying filters to videos:', error);
+        res.status(500).send('Failed to apply filters.');
+    }
+});
+
+/**
+ * POST /video-filters/apply
+ * Applies current filters to the videos table by setting is_active = false for matching videos.
+ */
+app.post('/video-filters/apply', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // Fetch all filters
+        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
+        const filters = filterResults.rows;
+        if (filters.length === 0) {
+            client.release();
+            return res.redirect('/video-filters');
+        }
+
+        // Fetch all videos
+        const videoResults = await client.query(`
+            SELECT v.id, v.video_id, v.video_title, v.playlist_id, v.channel_id, v.is_active, v.category_id, v.sub_category_id,
+                   p.playlist_name
+            FROM videos v
+            LEFT JOIN playlists p ON v.playlist_id = p.playlist_id
+        `);
+        const videos = videoResults.rows;
+
+        // Preprocess filters for efficient matching
+        const videoIdSet = new Set();
+        const playlistIdSet = new Set();
+        const privacyStatusSet = new Set();
+        const videoTitleFilters = [];
+        const playlistNameFilters = [];
+
+        for (const filter of filters) {
+            switch (filter.filter_type) {
+                case 'video_id':
+                    videoIdSet.add(filter.filter_value);
+                    break;
+                case 'playlist_id':
+                    playlistIdSet.add(filter.filter_value);
+                    break;
+                case 'privacy_status':
+                    privacyStatusSet.add(filter.filter_value.toLowerCase());
+                    break;
+                case 'video_title':
+                    videoTitleFilters.push(filter.filter_value.toLowerCase());
+                    break;
+                case 'playlist_name':
+                    playlistNameFilters.push(filter.filter_value.toLowerCase());
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // Find video IDs that match any filter
+        const filteredDbIds = [];
+        const allDbIds = [];
+        for (const video of videos) {
+            allDbIds.push(video.id);
+            let exclude = false;
+            if (videoIdSet.has(video.video_id)) { exclude = true; }
+            if (playlistIdSet.has(video.playlist_id)) { exclude = true; }
+            // privacy_status is not present in your schema, so skip
+            const itemTitle = (video.video_title || '').toLowerCase();
+            if (videoTitleFilters.some(f => itemTitle.includes(f))) { exclude = true; }
+            const itemName = (video.playlist_name || '').toLowerCase();
+            if (playlistNameFilters.some(f => itemName.includes(f))) { exclude = true; }
+            if (exclude) {
+                filteredDbIds.push(video.id);
+            }
+        }
+
+        // Compute non-filtered IDs
+        const filteredSet = new Set(filteredDbIds);
+        const nonFilteredDbIds = allDbIds.filter(id => !filteredSet.has(id));
+
+        await client.query('BEGIN');
+        // Set is_active = false for filtered videos
+        if (filteredDbIds.length > 0) {
+            await client.query(
+                `UPDATE videos SET is_active = false WHERE id = ANY($1::int[])`,
+                [filteredDbIds]
+            );
+        }
+        // Set is_active = true for non-filtered videos
+        if (nonFilteredDbIds.length > 0) {
+            await client.query(
+                `UPDATE videos SET is_active = true WHERE id = ANY($1::int[])`,
+                [nonFilteredDbIds]
+            );
+        }
+        await client.query('COMMIT');
+        client.release();
+        res.redirect('/video-filters?applied=1');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        client.release();
+        console.error('Error applying filters to videos:', error);
+        res.status(500).send('Failed to apply filters.');
+    }
+});
+
