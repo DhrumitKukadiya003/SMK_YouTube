@@ -52,6 +52,8 @@ const PLAYLISTS_TABLE = 'playlists';
 const TYPES_TABLE = 'types'; // Renamed constant
 const CATEGORIES_TABLE = 'categories'; // Renamed constant (now refers to the former sub_categories)
 const KATHA_DETAILS_TABLE = 'katha_details';
+const KATHA_DATA_TABLE = 'katha_dashboard_data';
+const KATHA_PLAYLIST_TABLE = 'katha_playlist';
 
 
 // --- Helper Function: Clean up uploaded file ---
@@ -63,6 +65,18 @@ function cleanupFile(filePath) {
             console.log(`Deleted temporary file: ${filePath}`);
         }
     });
+}
+
+// --- Helper Function: Sanitize category name for use in table names ---
+function sanitizeCategoryForTableName(categoryName) {
+    if (!categoryName || typeof categoryName !== 'string') return 'unknown_category';
+    return categoryName.toLowerCase()
+        .replace(/\s+/g, '_')         // Replace spaces with _
+        .replace(/[^\w-]+/g, '')     // Remove all non-word chars except - and _
+        .replace(/--+/g, '_')        // Replace multiple - with single _
+        .replace(/__+/g, '_')        // Replace multiple _ with single _
+        .replace(/^-+|-+$/g, '')     // Trim - from start/end
+        .replace(/^_+|_+$/g, '');    // Trim _ from start/end
 }
 
 // --- Helper Function: Export Data to Excel ---
@@ -399,14 +413,10 @@ async function refreshSpecificKirtanTables(client) {
             console.log(`${table.name} refreshed. Rows: ${countResult.rows[0].count}`);
         }
     } catch (error) {
-        console.error('Error checking database:', error);
-        res.status(500).send('Internal Server Error');
+        console.error('Error refreshing specific kirtan tables:', error);
+        throw error; // Re-throw error to be caught by caller
     }
-});
-
-app.get('/upload', (req, res) => {
-    res.render('index');
-});
+}
 
 /**
  * Generates the Kirtan playlist based on refreshed Kirtan dashboard data.
@@ -445,7 +455,7 @@ async function generateKirtanPlaylist(client) {
         let instrumentalKirtans = instrumentalKirtanRes.rows;
 
         if (liveKirtans.length === 0) {
-            console.log(`No live kirtan videos available from ${LIVE_KIRTAN_TABLE} for playlist generation. Kirtan playlist might be empty or sparsely populated.`);
+            console.log(`No live kirtan videos available from ${STREAMED_KIRTAN_TABLE} for playlist generation. Kirtan playlist might be empty or sparsely populated.`);
             if (studioKirtans.length === 0 && instrumentalKirtans.length === 0) {
                  console.log('All specific kirtan categories are empty. Kirtan playlist will be empty.');
                  return;
@@ -543,8 +553,241 @@ async function generateKirtanPlaylist(client) {
     }
 }
 
+/**
+ * Refreshes derived tables storing specific categories of Katha videos.
+ * @param {pg.Client} client - The PostgreSQL client.
+ * @returns {Promise<string[]>} - Array of created specific katha table names.
+ */
+async function refreshSpecificKathaTables(client) {
+    console.log('Refreshing specific katha tables...');
+    const createdTableNames = [];
+    try {
+        // Get distinct category names from the katha_dashboard_data
+        const distinctCategoriesRes = await client.query(`
+            SELECT DISTINCT category_name FROM ${KATHA_DATA_TABLE} WHERE category_name IS NOT NULL AND category_name <> ''
+        `);
 
+        if (distinctCategoriesRes.rows.length === 0) {
+            console.log('No distinct katha categories found to create specific tables.');
+            return createdTableNames;
+        }
 
+        for (const row of distinctCategoriesRes.rows) {
+            const categoryName = row.category_name;
+            const sanitizedCategory = sanitizeCategoryForTableName(categoryName);
+            const specificKathaTableName = `katha_category_${sanitizedCategory}_table`;
+
+            await client.query(`DROP TABLE IF EXISTS ${specificKathaTableName}`);
+            // Create table based on the main katha data table structure and filter by category_name
+            // Ensure sabha_number is present and used for ordering
+            await client.query(`
+                CREATE TABLE ${specificKathaTableName} AS
+                SELECT * FROM ${KATHA_DATA_TABLE}
+                WHERE category_name = $1
+                ORDER BY sabha_number ASC, video_db_id ASC
+            `, [categoryName]); // Filter by the original category name
+
+            const countResult = await client.query(`SELECT COUNT(*) FROM ${specificKathaTableName}`);
+            console.log(`${specificKathaTableName} refreshed with category '${categoryName}'. Rows: ${countResult.rows[0].count}`);
+            createdTableNames.push(specificKathaTableName);
+        }
+        return createdTableNames;
+    } catch (error) {
+        console.error('Error refreshing specific katha tables:', error);
+        throw error; // Re-throw error to be caught by caller
+    }
+}
+
+/**
+ * Refreshes the main Katha dashboard data table by querying the core video and katha_details tables.
+ * @param {pg.Client} client - The PostgreSQL client.
+ */
+async function refreshKathaDashboardData(client) {
+    console.log('Refreshing katha dashboard data...');
+    try {
+        // Clear the existing data
+        await client.query(`DROP TABLE IF EXISTS ${KATHA_DATA_TABLE}`); // Drop and recreate for schema consistency
+        await client.query(`
+            CREATE TABLE ${KATHA_DATA_TABLE} (
+                video_db_id INTEGER PRIMARY KEY,
+                video_id VARCHAR(255),
+                video_title VARCHAR(255),
+                channel_id VARCHAR(255),
+                type_name VARCHAR(255),
+                category_name VARCHAR(255),
+                playlist_id TEXT,
+                playlist_name TEXT,
+                orator VARCHAR(255),
+                sabha_number INTEGER,
+                granth_name VARCHAR(255)
+            )
+        `);
+
+        // Re-populate with latest data, including katha_details
+        const query = `
+            INSERT INTO ${KATHA_DATA_TABLE} (
+                video_db_id, video_id, video_title, channel_id,
+                type_name, category_name, playlist_id, playlist_name,
+                orator, sabha_number, granth_name
+            )
+            SELECT
+                v.id AS video_db_id,
+                v.video_id,
+                v.video_title,
+                v.channel_id,
+                t.type_name,
+                c.category_name,
+                v.playlist_id,
+                p.playlist_name,
+                kd.orator,
+                kd.sabha_number,
+                kd.granth_name
+            FROM ${VIDEOS_TABLE} v
+            LEFT JOIN ${TYPES_TABLE} t ON v.type_id = t.type_id
+            LEFT JOIN ${CATEGORIES_TABLE} c ON v.category_id = c.category_id
+            LEFT JOIN ${PLAYLISTS_TABLE} p ON v.playlist_id = p.playlist_id
+            LEFT JOIN ${KATHA_DETAILS_TABLE} kd ON v.id = kd.video_id
+            WHERE (LOWER(t.type_name) LIKE '%katha%' OR v.is_kathatv = true) AND v.is_active = true
+            ORDER BY v.video_title ASC;
+        `;
+        await client.query(query);
+        const countResult = await client.query(`SELECT COUNT(*) FROM ${KATHA_DATA_TABLE}`);
+        console.log(`Katha dashboard data refreshed successfully. Total rows in ${KATHA_DATA_TABLE}: ${countResult.rows[0].count}`);
+
+        // Refresh the specific katha tables based on the newly populated dashboard data
+        // This function will now return the names of the created tables
+        const specificKathaTableNames = await refreshSpecificKathaTables(client);
+
+        // Generate the katha playlist using these specific tables
+        if (specificKathaTableNames.length > 0) {
+            await generateKathaPlaylist(client, specificKathaTableNames);
+        } else {
+            console.log('No specific katha tables created, skipping katha playlist generation.');
+            // Ensure playlist table is at least empty if it was expected
+            await client.query(`DROP TABLE IF EXISTS ${KATHA_PLAYLIST_TABLE}`);
+            await client.query(`
+                CREATE TABLE ${KATHA_PLAYLIST_TABLE} (
+                    id SERIAL PRIMARY KEY, video_db_id INTEGER NOT NULL, video_id VARCHAR(255) NOT NULL,
+                    video_title VARCHAR(255) NOT NULL, channel_id VARCHAR(255), type_name VARCHAR(255),
+                    category_name VARCHAR(255), playlist_id TEXT, playlist_name TEXT,
+                    sabha_number INTEGER, playlist_order INTEGER NOT NULL,
+                    FOREIGN KEY (video_db_id) REFERENCES videos(id) ON DELETE CASCADE
+                )
+            `);
+        }
+
+    } catch (error) {
+        console.error('Error refreshing katha dashboard data:', error);
+        throw error; // Re-throw error
+    }
+}
+
+/**
+ * Generates the Katha playlist.
+ * Logic: For each sabha_number (in ascending order), take one video from each category
+ * that has a video for that sabha_number.
+ * @param {pg.Client} client - The PostgreSQL client.
+ * @param {string[]} specificKathaTableNames - Array of names for specific katha category tables.
+ */
+async function generateKathaPlaylist(client, specificKathaTableNames) {
+    console.log('Generating katha playlist...');
+    try {
+        await client.query(`DROP TABLE IF EXISTS ${KATHA_PLAYLIST_TABLE}`);
+        await client.query(`
+            CREATE TABLE ${KATHA_PLAYLIST_TABLE} (
+                id SERIAL PRIMARY KEY,
+                video_db_id INTEGER NOT NULL,
+                video_id VARCHAR(255) NOT NULL,
+                video_title VARCHAR(255) NOT NULL,
+                channel_id VARCHAR(255),
+                type_name VARCHAR(255),
+                category_name VARCHAR(255), -- This will be the category of the katha video
+                playlist_id TEXT,
+                playlist_name TEXT,
+                sabha_number INTEGER,        -- Store sabha_number in playlist
+                playlist_order INTEGER NOT NULL,
+                FOREIGN KEY (video_db_id) REFERENCES videos(id) ON DELETE CASCADE
+            )
+        `);
+
+        if (!specificKathaTableNames || specificKathaTableNames.length === 0) {
+            console.log('No specific katha tables provided for playlist generation. Katha playlist will be empty.');
+            return;
+        }
+
+        let allKathaVideos = [];
+        // Sort table names to ensure consistent category order in playlist for same sabha_number
+        const sortedTableNames = [...specificKathaTableNames].sort();
+
+        for (const tableName of sortedTableNames) {
+            // These tables are already ordered by sabha_number ASC, video_db_id ASC
+            const result = await client.query(`SELECT *, '${tableName}' as original_table FROM ${tableName}`);
+            allKathaVideos.push(...result.rows);
+        }
+
+        if (allKathaVideos.length === 0) {
+            console.log('No videos found in specific katha tables. Katha playlist will be empty.');
+            return;
+        }
+
+        // Group videos by sabha_number
+        const videosBySabha = allKathaVideos.reduce((acc, video) => {
+            const sabha = video.sabha_number === null || video.sabha_number === undefined ? -1 : video.sabha_number; // Handle null sabha_numbers
+            if (!acc[sabha]) {
+                acc[sabha] = [];
+            }
+            acc[sabha].push(video);
+            return acc;
+        }, {});
+
+        const sortedSabhaNumbers = Object.keys(videosBySabha).map(Number).sort((a, b) => a - b);
+
+        let playlist = [];
+        let playlistOrder = 1;
+
+        for (const sabhaNum of sortedSabhaNumbers) {
+            const videosForThisSabha = videosBySabha[sabhaNum];
+            // Videos for this sabha are already somewhat ordered by original_table due to fetching order.
+            // If a stricter per-category pick is needed within a sabha_number, further sorting/filtering here.
+            // For now, adding them as they appear (which respects table fetch order).
+            for (const video of videosForThisSabha) {
+                playlist.push({
+                    video_db_id: video.video_db_id,
+                    video_id: video.video_id,
+                    video_title: video.video_title,
+                    channel_id: video.channel_id,
+                    type_name: video.type_name, // Should be 'Katha' or similar
+                    category_name: video.category_name, // The actual category of the katha
+                    playlist_id: video.playlist_id,
+                    playlist_name: video.playlist_name,
+                    sabha_number: video.sabha_number,
+                    playlist_order: playlistOrder++,
+                });
+            }
+        }
+
+        for (const video of playlist) {
+            await client.query(
+                `INSERT INTO ${KATHA_PLAYLIST_TABLE} (
+                    video_db_id, video_id, video_title, channel_id, type_name,
+                    category_name, playlist_id, playlist_name, sabha_number, playlist_order
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                [
+                    video.video_db_id, video.video_id, video.video_title, video.channel_id, video.type_name,
+                    video.category_name, video.playlist_id, video.playlist_name, video.sabha_number, video.playlist_order
+                ]
+            );
+        }
+        const playlistCountResult = await client.query(`SELECT COUNT(*) FROM ${KATHA_PLAYLIST_TABLE}`);
+        console.log(`Katha Playlist Generated. Total rows in ${KATHA_PLAYLIST_TABLE}: ${playlistCountResult.rows[0].count}`);
+
+    } catch (error) {
+        console.error('Error generating Katha Playlist:', error);
+        throw error;
+    }
+}
+
+// --- Filter Application Function ---
 /**
  * Applies exclusion filters from the database to the uploaded data.
  * @param {Array} data - The video data extracted from the Excel file.
@@ -554,7 +797,7 @@ async function generateKirtanPlaylist(client) {
 async function applyFilters(data, client) {
     console.log('Applying filters (will update is_active=false for matches)...');
     try {
-        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
+        const filterResults = await client.query(`SELECT filter_type, filter_value FROM ${VIDEO_FILTERS_TABLE}`);
         const filters = filterResults.rows;
 
         if (filters.length === 0) {
@@ -844,6 +1087,10 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
             await refreshKirtanDashboardData(client); // This will now also call refreshSpecificKirtanTables
             
             await generateKirtanPlaylist(client); // Generate Kirtan playlist after Kirtan data is refreshed
+
+            console.log('Triggering refresh of Katha data and playlist...');
+            await refreshKathaDashboardData(client); // This calls specific katha tables and playlist generation
+
             
             await client.query('COMMIT');
             console.log('Upload process committed successfully.');
@@ -865,111 +1112,6 @@ app.post('/upload', upload.single('excelFile'), async (req, res) => {
     }
 });
 
-async function getFilteredVideoIds(data, client) {
-    // Fetch filters once
-    const FILTERS_TABLE = 'video_filters';
-    const filterResults = await client.query(`SELECT * FROM ${FILTERS_TABLE}`);
-    const filters = filterResults.rows;
-
-    if (filters.length === 0) {
-        return new Set(); // No filters, nothing to mark inactive
-    }
-
-    // Preprocess filters
-    const videoIdSet = new Set();
-    const playlistIdSet = new Set();
-    const privacyStatusSet = new Set();
-    const videoTitleFilters = [];
-    const playlistNameFilters = [];
-
-    for (const filter of filters) {
-        switch (filter.filter_type) {
-            case 'video_id':
-                videoIdSet.add(filter.filter_value);
-                break;
-            case 'playlist_id':
-                playlistIdSet.add(filter.filter_value);
-                break;
-            case 'privacy_status':
-                privacyStatusSet.add(filter.filter_value.toLowerCase());
-                break;
-            case 'video_title':
-                videoTitleFilters.push(filter.filter_value.toLowerCase());
-                break;
-            case 'playlist_name':
-                playlistNameFilters.push(filter.filter_value.toLowerCase());
-                break;
-            default:
-                break;
-        }
-    }
-
-    // Find video IDs that match any filter
-    const filteredIds = new Set();
-    for (const item of data) {
-        if (videoIdSet.has(item['Video Id'])) { filteredIds.add(item['Video Id']); continue; }
-        if (playlistIdSet.has(item['Playlist Id'])) { filteredIds.add(item['Video Id']); continue; }
-        if (privacyStatusSet.has((item['Privacy Status'] || '').toLowerCase())) { filteredIds.add(item['Video Id']); continue; }
-        const itemTitle = (item['Video Title'] || '').toLowerCase();
-        if (videoTitleFilters.some(f => itemTitle.includes(f))) { filteredIds.add(item['Video Id']); continue; }
-        const itemName = (item['Playlist Name'] || '').toLowerCase();
-        if (playlistNameFilters.some(f => itemName.includes(f))) { filteredIds.add(item['Video Id']); continue; }
-    }
-    return filteredIds;
-}
-
-async function getFilteredVideoIds(data, client) {
-    // Fetch filters once
-    const FILTERS_TABLE = 'video_filters';
-    const filterResults = await client.query(`SELECT * FROM ${FILTERS_TABLE}`);
-    const filters = filterResults.rows;
-
-    if (filters.length === 0) {
-        return new Set(); // No filters, nothing to mark inactive
-    }
-
-    // Preprocess filters
-    const videoIdSet = new Set();
-    const playlistIdSet = new Set();
-    const privacyStatusSet = new Set();
-    const videoTitleFilters = [];
-    const playlistNameFilters = [];
-
-    for (const filter of filters) {
-        switch (filter.filter_type) {
-            case 'video_id':
-                videoIdSet.add(filter.filter_value);
-                break;
-            case 'playlist_id':
-                playlistIdSet.add(filter.filter_value);
-                break;
-            case 'privacy_status':
-                privacyStatusSet.add(filter.filter_value.toLowerCase());
-                break;
-            case 'video_title':
-                videoTitleFilters.push(filter.filter_value.toLowerCase());
-                break;
-            case 'playlist_name':
-                playlistNameFilters.push(filter.filter_value.toLowerCase());
-                break;
-            default:
-                break;
-        }
-    }
-
-    // Find video IDs that match any filter
-    const filteredIds = new Set();
-    for (const item of data) {
-        if (videoIdSet.has(item['Video Id'])) { filteredIds.add(item['Video Id']); continue; }
-        if (playlistIdSet.has(item['Playlist Id'])) { filteredIds.add(item['Video Id']); continue; }
-        if (privacyStatusSet.has((item['Privacy Status'] || '').toLowerCase())) { filteredIds.add(item['Video Id']); continue; }
-        const itemTitle = (item['Video Title'] || '').toLowerCase();
-        if (videoTitleFilters.some(f => itemTitle.includes(f))) { filteredIds.add(item['Video Id']); continue; }
-        const itemName = (item['Playlist Name'] || '').toLowerCase();
-        if (playlistNameFilters.some(f => itemName.includes(f))) { filteredIds.add(item['Video Id']); continue; }
-    }
-    return filteredIds;
-}
 
 // --- Display Routes ---
 
@@ -1159,6 +1301,8 @@ app.post('/edit/:dbId', async (req, res) => {
         await refreshDhunDashboardData(client);
         await refreshKirtanDashboardData(client); // Also refresh Kirtan data if relevant
         await generateKirtanPlaylist(client); // And Kirtan playlist
+        await refreshKathaDashboardData(client); // And Katha data and playlist
+
         await client.query('COMMIT'); // Commit the main transaction
 
 
@@ -1282,12 +1426,13 @@ app.get('/kirtan-dashboard/export', (req, res) => {
 
 // Generic function to handle display logic for specific dhun tables
 async function displaySpecificDhunTable(req, res, tableName, viewName, exportPath) {
+    // This function can be made more generic if needed, e.g. displaySpecificDataTable
      let client;
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = 10;
         client = await pool.connect();
-
+        // Ensure table exists before querying
         const countResult = await client.query(`SELECT COUNT(*) FROM ${tableName}`);
         const totalRecords = parseInt(countResult.rows[0].count);
         const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
@@ -1296,18 +1441,55 @@ async function displaySpecificDhunTable(req, res, tableName, viewName, exportPat
         // Select all columns, which now include playlist info, type name, and category name
         const result = await client.query(`SELECT * FROM ${tableName} ORDER BY id LIMIT $1 OFFSET $2`, [limit, offset]);
 
-
         res.render(viewName, {
             videos: result.rows,
             currentPage: page > 0 ? page : 1,
             totalPages: totalPages,
-            exportUrl: exportPath
+            exportUrl: exportPath,
+            currentRoute: req.path // For navbar highlighting
         });
     } catch (error) {
         console.error(`Error loading ${tableName} table:`, error);
         res.status(500).send(`Failed to load ${tableName} data.`);
     } finally {
          if (client) client.release();
+    }
+}
+
+// Generic function to handle display logic for specific katha category tables
+async function displaySpecificKathaCategoryTable(req, res, tableName, viewName, exportPathSuffix) {
+    let client;
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10; // Or make configurable
+        client = await pool.connect();
+
+        // Check if table exists (important for dynamically created tables)
+        const tableExistsRes = await client.query("SELECT to_regclass($1) AS name", [tableName]);
+        if (!tableExistsRes.rows[0].name) {
+            return res.status(404).send(`Table ${tableName} not found. It might not have been generated yet or the category has no videos.`);
+        }
+
+        const countResult = await client.query(`SELECT COUNT(*) FROM ${tableName}`);
+        const totalRecords = parseInt(countResult.rows[0].count);
+        const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
+        const offset = (page > 0 ? page - 1 : 0) * limit;
+
+        const result = await client.query(`SELECT * FROM ${tableName} ORDER BY sabha_number ASC, video_db_id ASC LIMIT $1 OFFSET $2`, [limit, offset]);
+
+        res.render(viewName, { // e.g., 'specific-katha-category-table.ejs'
+            videos: result.rows,
+            currentPage: page > 0 ? page : 1,
+            totalPages: totalPages,
+            exportUrl: `/katha/category-table/${tableName}/export`, // Construct export URL
+            currentRoute: req.path,
+            tableName: tableName // Pass table name to view for title or other info
+        });
+    } catch (error) {
+        console.error(`Error loading ${tableName} table:`, error);
+        res.status(500).send(`Failed to load ${tableName} data.`);
+    } finally {
+        if (client) client.release();
     }
 }
 
@@ -1496,6 +1678,136 @@ app.get('/kirtan-playlist/export', (req, res) => {
     exportToExcel(res, query, 'Kirtan_Playlist');
 });
 
+// --- Katha Dashboard Routes ---
+app.get('/katha-dashboard', async (req, res) => {
+    let client;
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10;
+        client = await pool.connect();
+
+        const countQuery = `SELECT COUNT(*) FROM ${KATHA_DATA_TABLE}`;
+        const countResult = await client.query(countQuery);
+        const totalRecords = parseInt(countResult.rows[0].count);
+        const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
+        const offset = (page > 0 ? page - 1 : 0) * limit;
+
+        const query = `
+            SELECT video_db_id, video_id, video_title, channel_id, type_name, category_name,
+                   playlist_id, playlist_name, orator, sabha_number, granth_name
+            FROM ${KATHA_DATA_TABLE}
+            ORDER BY video_title ASC
+            LIMIT $1 OFFSET $2;
+        `;
+        const result = await client.query(query, [limit, offset]);
+
+        res.render('katha-dashboard', { // Create katha-dashboard.ejs
+            videos: result.rows,
+            currentPage: page > 0 ? page : 1,
+            totalPages: totalPages,
+            exportUrl: '/katha-dashboard/export',
+            currentRoute: req.path
+        });
+    } catch (err) {
+        console.error('Error loading Katha Dashboard:', err);
+        if (err.code === '42P01') { // undefined_table
+            res.status(404).send('Katha dashboard data has not been generated yet. Please upload data first.');
+        } else {
+            res.status(500).send('Failed to load Katha Dashboard');
+        }
+    } finally {
+        if (client) client.release();
+    }
+});
+
+app.get('/katha-dashboard/export', (req, res) => {
+    const query = `
+        SELECT video_db_id, video_id, video_title, channel_id, type_name, category_name,
+               playlist_id, playlist_name, orator, sabha_number, granth_name
+        FROM ${KATHA_DATA_TABLE} ORDER BY video_title ASC`;
+    exportToExcel(res, query, 'Katha_Dashboard_Data');
+});
+
+// --- Specific Katha Category Table Routes ---
+app.get('/katha-categories', async (req, res) => {
+    let client;
+    try {
+        client = await pool.connect();
+        // Query information_schema for tables matching the pattern
+        const result = await client.query(`
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name LIKE 'katha_category_%_table'
+            ORDER BY table_name;
+        `);
+        const categoryTables = result.rows.map(row => row.table_name);
+        res.render('katha-categories-list', { // Create katha-categories-list.ejs
+            categoryTables: categoryTables,
+            currentRoute: req.path
+        });
+    } catch (error) {
+        console.error('Error fetching katha category tables:', error);
+        res.status(500).send('Failed to load katha category list.');
+    } finally {
+        if (client) client.release();
+    }
+});
+
+app.get('/katha/category-table/:tableName', (req, res) => {
+    const { tableName } = req.params;
+    // Basic validation for tableName to prevent injection if used directly in SQL (though parameterized below)
+    if (!tableName.match(/^katha_category_[\w-]+_table$/)) {
+        return res.status(400).send('Invalid table name format.');
+    }
+    // Use the generic display function
+    displaySpecificKathaCategoryTable(req, res, tableName, 'specific-katha-category-table', `/katha/category-table/${tableName}/export`);
+});
+
+app.get('/katha/category-table/:tableName/export', (req, res) => {
+    const { tableName } = req.params;
+    if (!tableName.match(/^katha_category_[\w-]+_table$/)) {
+        return res.status(400).send('Invalid table name format for export.');
+    }
+    const query = `SELECT * FROM ${tableName} ORDER BY sabha_number ASC, video_db_id ASC`; // Ensure table name is safe
+    exportToExcel(res, query, `${tableName}_Data`);
+});
+
+// --- Katha Playlist Routes ---
+app.get('/katha-playlist', async (req, res) => {
+    // This route is very similar to /dhun-playlist, adapt as needed for pagination, 'all' limit etc.
+    // For brevity, a simplified version:
+    let client;
+    try {
+        client = await pool.connect();
+        const result = await client.query(`SELECT * FROM ${KATHA_PLAYLIST_TABLE} ORDER BY playlist_order ASC`);
+        res.render('katha-playlist', { // Create katha-playlist.ejs
+            playlist: result.rows,
+            exportUrl: '/katha-playlist/export',
+            currentRoute: req.path
+            // Add pagination variables if implementing full pagination
+        });
+    } catch (error) {
+        console.error('Error loading Katha Playlist:', error);
+        if (error.code === '42P01') {
+             res.status(404).send('Katha playlist has not been generated yet. Please upload data first.');
+        } else {
+            res.status(500).send('Failed to load Katha Playlist');
+        }
+    } finally {
+        if (client) client.release();
+    }
+});
+
+app.get('/katha-playlist/export', (req, res) => {
+    const query = `
+        SELECT video_db_id, video_id, video_title, channel_id, type_name, category_name,
+               playlist_id, playlist_name, sabha_number, playlist_order
+        FROM ${KATHA_PLAYLIST_TABLE}
+        ORDER BY playlist_order ASC
+    `;
+    exportToExcel(res, query, 'Katha_Playlist');
+});
+
 // --- Video Filter Management Routes ---
 
 // Display Video Filters Page
@@ -1640,205 +1952,3 @@ app.post('/video-filters/import', upload.single('excelFile'), async (req, res) =
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
-/**
- * POST /video-filters/apply
- * Applies current filters to the videos table by setting is_active = false for matching videos.
- */
-app.post('/video-filters/apply', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        // Fetch all filters
-        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
-        const filters = filterResults.rows;
-        if (filters.length === 0) {
-            client.release();
-            return res.redirect('/video-filters');
-        }
-
-        // Fetch all videos
-        const videoResults = await client.query(`
-            SELECT v.id, v.video_id, v.video_title, v.playlist_id, v.channel_id, v.is_active, v.category_id, v.sub_category_id,
-                   p.playlist_name
-            FROM videos v
-            LEFT JOIN playlists p ON v.playlist_id = p.playlist_id
-        `);
-        const videos = videoResults.rows;
-
-        // Preprocess filters for efficient matching
-        const videoIdSet = new Set();
-        const playlistIdSet = new Set();
-        const privacyStatusSet = new Set();
-        const videoTitleFilters = [];
-        const playlistNameFilters = [];
-
-        for (const filter of filters) {
-            switch (filter.filter_type) {
-                case 'video_id':
-                    videoIdSet.add(filter.filter_value);
-                    break;
-                case 'playlist_id':
-                    playlistIdSet.add(filter.filter_value);
-                    break;
-                case 'privacy_status':
-                    privacyStatusSet.add(filter.filter_value.toLowerCase());
-                    break;
-                case 'video_title':
-                    videoTitleFilters.push(filter.filter_value.toLowerCase());
-                    break;
-                case 'playlist_name':
-                    playlistNameFilters.push(filter.filter_value.toLowerCase());
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        // Find video IDs that match any filter
-        const filteredDbIds = [];
-        const allDbIds = [];
-        for (const video of videos) {
-            allDbIds.push(video.id);
-            let exclude = false;
-            if (videoIdSet.has(video.video_id)) { exclude = true; }
-            if (playlistIdSet.has(video.playlist_id)) { exclude = true; }
-            // privacy_status is not present in your schema, so skip
-            const itemTitle = (video.video_title || '').toLowerCase();
-            if (videoTitleFilters.some(f => itemTitle.includes(f))) { exclude = true; }
-            const itemName = (video.playlist_name || '').toLowerCase();
-            if (playlistNameFilters.some(f => itemName.includes(f))) { exclude = true; }
-            if (exclude) {
-                filteredDbIds.push(video.id);
-            }
-        }
-
-        // Compute non-filtered IDs
-        const filteredSet = new Set(filteredDbIds);
-        const nonFilteredDbIds = allDbIds.filter(id => !filteredSet.has(id));
-
-        await client.query('BEGIN');
-        // Set is_active = false for filtered videos
-        if (filteredDbIds.length > 0) {
-            await client.query(
-                `UPDATE videos SET is_active = false WHERE id = ANY($1::int[])`,
-                [filteredDbIds]
-            );
-        }
-        // Set is_active = true for non-filtered videos
-        if (nonFilteredDbIds.length > 0) {
-            await client.query(
-                `UPDATE videos SET is_active = true WHERE id = ANY($1::int[])`,
-                [nonFilteredDbIds]
-            );
-        }
-        await client.query('COMMIT');
-        client.release();
-        res.redirect('/video-filters?applied=1');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        client.release();
-        console.error('Error applying filters to videos:', error);
-        res.status(500).send('Failed to apply filters.');
-    }
-});
-
-/**
- * POST /video-filters/apply
- * Applies current filters to the videos table by setting is_active = false for matching videos.
- */
-app.post('/video-filters/apply', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        // Fetch all filters
-        const filterResults = await client.query(`SELECT * FROM ${VIDEO_FILTERS_TABLE}`);
-        const filters = filterResults.rows;
-        if (filters.length === 0) {
-            client.release();
-            return res.redirect('/video-filters');
-        }
-
-        // Fetch all videos
-        const videoResults = await client.query(`
-            SELECT v.id, v.video_id, v.video_title, v.playlist_id, v.channel_id, v.is_active, v.category_id, v.sub_category_id,
-                   p.playlist_name
-            FROM videos v
-            LEFT JOIN playlists p ON v.playlist_id = p.playlist_id
-        `);
-        const videos = videoResults.rows;
-
-        // Preprocess filters for efficient matching
-        const videoIdSet = new Set();
-        const playlistIdSet = new Set();
-        const privacyStatusSet = new Set();
-        const videoTitleFilters = [];
-        const playlistNameFilters = [];
-
-        for (const filter of filters) {
-            switch (filter.filter_type) {
-                case 'video_id':
-                    videoIdSet.add(filter.filter_value);
-                    break;
-                case 'playlist_id':
-                    playlistIdSet.add(filter.filter_value);
-                    break;
-                case 'privacy_status':
-                    privacyStatusSet.add(filter.filter_value.toLowerCase());
-                    break;
-                case 'video_title':
-                    videoTitleFilters.push(filter.filter_value.toLowerCase());
-                    break;
-                case 'playlist_name':
-                    playlistNameFilters.push(filter.filter_value.toLowerCase());
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        // Find video IDs that match any filter
-        const filteredDbIds = [];
-        const allDbIds = [];
-        for (const video of videos) {
-            allDbIds.push(video.id);
-            let exclude = false;
-            if (videoIdSet.has(video.video_id)) { exclude = true; }
-            if (playlistIdSet.has(video.playlist_id)) { exclude = true; }
-            // privacy_status is not present in your schema, so skip
-            const itemTitle = (video.video_title || '').toLowerCase();
-            if (videoTitleFilters.some(f => itemTitle.includes(f))) { exclude = true; }
-            const itemName = (video.playlist_name || '').toLowerCase();
-            if (playlistNameFilters.some(f => itemName.includes(f))) { exclude = true; }
-            if (exclude) {
-                filteredDbIds.push(video.id);
-            }
-        }
-
-        // Compute non-filtered IDs
-        const filteredSet = new Set(filteredDbIds);
-        const nonFilteredDbIds = allDbIds.filter(id => !filteredSet.has(id));
-
-        await client.query('BEGIN');
-        // Set is_active = false for filtered videos
-        if (filteredDbIds.length > 0) {
-            await client.query(
-                `UPDATE videos SET is_active = false WHERE id = ANY($1::int[])`,
-                [filteredDbIds]
-            );
-        }
-        // Set is_active = true for non-filtered videos
-        if (nonFilteredDbIds.length > 0) {
-            await client.query(
-                `UPDATE videos SET is_active = true WHERE id = ANY($1::int[])`,
-                [nonFilteredDbIds]
-            );
-        }
-        await client.query('COMMIT');
-        client.release();
-        res.redirect('/video-filters?applied=1');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        client.release();
-        console.error('Error applying filters to videos:', error);
-        res.status(500).send('Failed to apply filters.');
-    }
-});
-

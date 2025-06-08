@@ -1,0 +1,44 @@
+<%- include('partials/header') %>
+
+<div class="container mt-4">
+    <h1>Katha Playlist</h1>
+    <p>Generated Katha playlist based on sabha number and category sequence.</p>
+
+    <% if (exportUrl) { %>
+        <a href="<%= exportUrl %>" class="btn btn-success mb-3">Export Katha Playlist</a>
+    <% } %>
+
+    <% if (playlist && playlist.length > 0) { %>
+        <table class="table table-striped table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Order</th>
+                    <th>Video ID</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Category</th>
+                    <th>Sabha No.</th>
+                    <th>Original Playlist</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% playlist.forEach(video => { %>
+                    <tr>
+                        <td><%= video.playlist_order %></td>
+                        <td><a href="https://www.youtube.com/watch?v=<%= video.video_id %>" target="_blank"><%= video.video_id %></a></td>
+                        <td><%= video.video_title %></td>
+                        <td><%= video.type_name %></td>
+                        <td><%= video.category_name %></td>
+                        <td><%= video.sabha_number || 'N/A' %></td>
+                        <td><%= video.playlist_name || 'N/A' %></td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+
+    <% } else { %>
+        <p>Katha playlist is empty or has not been generated yet. Please upload data.</p>
+    <% } %>
+</div>
+
+<%- include('partials/footer') %>

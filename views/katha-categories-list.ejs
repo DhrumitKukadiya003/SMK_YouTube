@@ -1,0 +1,25 @@
+<%- include('partials/header') %>
+
+<div class="container mt-4">
+    <h1>Katha Video Categories</h1>
+    <p>The following specific katha category tables have been generated. Click to view videos for each category.</p>
+
+    <% if (categoryTables && categoryTables.length > 0) { %>
+        <ul class="list-group">
+            <% categoryTables.forEach(tableName => { %>
+                <%
+                    let displayName = tableName.replace('katha_category_', '');
+                    displayName = displayName.replace('_table', '');
+                    displayName = displayName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                %>
+                <li class="list-group-item">
+                    <a href="/katha/category-table/<%= tableName %>"><%= displayName %></a>
+                </li>
+            <% }); %>
+        </ul>
+    <% } else { %>
+        <p>No specific katha category tables found. Please upload data to generate them.</p>
+    <% } %>
+</div>
+
+<%- include('partials/footer') %>
